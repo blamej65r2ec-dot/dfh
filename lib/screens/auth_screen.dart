@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../widgets/animations.dart';
 import '../widgets/glass.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -67,29 +68,47 @@ class _AuthScreenState extends State<AuthScreen> {
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: GlassBox(
+            child: FadeSlideIn(
+              offset: const Offset(0, 0.08),
+              duration: const Duration(milliseconds: 600),
+              child: GlassBox(
               radius: 32,
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    _signUp ? 'Create account' : 'Welcome back',
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Text(
+                      _signUp ? 'Create account' : 'Welcome back',
+                      key: ValueKey(_signUp),
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
                   ),
                   const SizedBox(height: 20),
-                  if (_signUp) ...[
-                    TextField(
-                      controller: _user,
-                      autocorrect: false,
-                      decoration: const InputDecoration(hintText: 'Username'),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: _signUp
+                        ? Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextField(
+                                controller: _user,
+                                autocorrect: false,
+                                decoration:
+                                    const InputDecoration(hintText: 'Username'),
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                          )
+                        : const SizedBox(width: double.infinity),
+                  ),
                   TextField(
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
@@ -102,18 +121,41 @@ class _AuthScreenState extends State<AuthScreen> {
                     obscureText: true,
                     decoration: const InputDecoration(hintText: 'Password'),
                   ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_error!,
-                        style: TextStyle(
-                            color: Theme.of(context).colorScheme.error)),
-                  ],
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: _error == null
+                        ? const SizedBox(width: double.infinity)
+                        : Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Text(
+                              _error!,
+                              style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error),
+                            ),
+                          ),
+                  ),
                   const SizedBox(height: 20),
-                  FilledButton(
-                    onPressed: _busy ? null : _submit,
-                    child: Text(_busy
-                        ? 'Please wait'
-                        : (_signUp ? 'Sign up' : 'Sign in')),
+                  PressScale(
+                    child: FilledButton(
+                      onPressed: _busy ? null : _submit,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: _busy
+                            ? SizedBox(
+                                key: const ValueKey('busy'),
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Theme.of(context).colorScheme.onPrimary,
+                                ),
+                              )
+                            : Text(_signUp ? 'Sign up' : 'Sign in',
+                                key: ValueKey(_signUp)),
+                      ),
+                    ),
                   ),
                   TextButton(
                     onPressed:
@@ -124,6 +166,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                 ],
               ),
+            ),
             ),
           ),
         ),

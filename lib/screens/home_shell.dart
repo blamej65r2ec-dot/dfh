@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../widgets/animations.dart';
 import '../widgets/glass.dart';
+import 'feed_page.dart';
+import 'record_page.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -22,6 +26,19 @@ class _HomeShellState extends State<HomeShell> {
   ];
   static const _labels = ['Home', 'Search', 'Record', 'Alerts', 'Profile'];
 
+  Widget _page(int i) {
+    switch (i) {
+      case 0:
+        return const FeedPage();
+      case 2:
+        return RecordPage(onPosted: () => setState(() => _i = 0));
+      case 4:
+        return const ProfilePage();
+      default:
+        return _Soon(_labels[i]);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -29,41 +46,95 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       body: Stack(
         children: [
-          IndexedStack(
-            index: _i,
-            children: const [
-              _Soon('Home'),
-              _Soon('Search'),
-              _Soon('Record'),
-              _Soon('Alerts'),
-              ProfilePage(),
-            ],
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 320),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0.04, 0),
+                  end: Offset.zero,
+                ).animate(anim),
+                child: child,
+              ),
+            ),
+            child: KeyedSubtree(key: ValueKey(_i), child: _page(_i)),
           ),
           Positioned(
             left: 20,
             right: 20,
             bottom: 24 + bottom,
-            child: GlassBox(
-              radius: 36,
-              padding: const EdgeInsets.all(8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  for (var k = 0; k < 5; k++)
-                    IconButton(
-                      tooltip: _labels[k],
-                      onPressed: () => setState(() => _i = k),
-                      style: IconButton.styleFrom(
-                        fixedSize: const Size(52, 52),
-                        backgroundColor:
-                            k == _i ? cs.primary : Colors.transparent,
-                        foregroundColor: k == _i
-                            ? cs.onPrimary
-                            : cs.onSurface.withAlpha(150),
+            child: FadeSlideIn(
+              offset: const Offset(0, 0.5),
+              delay: const Duration(milliseconds: 150),
+              child: GlassBox(
+                radius: 36,
+                padding: const EdgeInsets.all(8),
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    final step = (c.maxWidth - 52) / 4;
+                    return SizedBox(
+                      height: 52,
+                      child: Stack(
+                        children: [
+                          AnimatedPositioned(
+                            duration: const Duration(milliseconds: 380),
+                            curve: Curves.easeOutBack,
+                            left: _i * step,
+                            child: Container(
+                              width: 52,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: cs.primary,
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color.fromRGBO(0, 0, 0, .35),
+                                    blurRadius: 14,
+                                    offset: Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          for (var k = 0; k < 5; k++)
+                            Positioned(
+                              left: k * step,
+                              child: SizedBox(
+                                width: 52,
+                                height: 52,
+                                child: IconButton(
+                                  tooltip: _labels[k],
+                                  onPressed: () {
+                                    HapticFeedback.selectionClick();
+                                    setState(() => _i = k);
+                                  },
+                                  icon: AnimatedScale(
+                                    scale: k == _i ? 1.12 : 1,
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeOutBack,
+                                    child: TweenAnimationBuilder<Color?>(
+                                      tween: ColorTween(
+                                        end: k == _i
+                                            ? cs.onPrimary
+                                            : cs.onSurface.withAlpha(150),
+                                      ),
+                                      duration:
+                                          const Duration(milliseconds: 250),
+                                      builder: (context, color, _) =>
+                                          Icon(_icons[k], size: 24, color: color),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                      icon: Icon(_icons[k], size: 24),
-                    ),
-                ],
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -79,7 +150,9 @@ class _Soon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(child: Text('$name: coming next'));
+    return Center(
+      child: FadeSlideIn(child: Text('$name: coming next')),
+    );
   }
 }
 
@@ -99,13 +172,21 @@ class ProfilePage extends StatelessWidget {
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(name, style: Theme.of(context).textTheme.headlineSmall),
+                FadeSlideIn(
+                  child: Text(name,
+                      style: Theme.of(context).textTheme.headlineSmall),
+                ),
                 const SizedBox(height: 16),
-                FilledButton(
-                  style:
-                      FilledButton.styleFrom(minimumSize: const Size(160, 50)),
-                  onPressed: () => client.auth.signOut(),
-                  child: const Text('Sign out'),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 120),
+                  child: PressScale(
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                          minimumSize: const Size(160, 50)),
+                      onPressed: () => client.auth.signOut(),
+                      child: const Text('Sign out'),
+                    ),
+                  ),
                 ),
               ],
             );

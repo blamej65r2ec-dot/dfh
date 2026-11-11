@@ -11,6 +11,10 @@ class AppTheme {
     final base = ThemeData(brightness: b, useMaterial3: true);
     return base.copyWith(
       scaffoldBackgroundColor: Colors.transparent,
+      pageTransitionsTheme: const PageTransitionsTheme(builders: {
+        TargetPlatform.android: ZoomPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      }),
       colorScheme: ColorScheme(
         brightness: b,
         primary: fg,

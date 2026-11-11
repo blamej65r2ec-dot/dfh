@@ -42,9 +42,13 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<AuthState>(
       stream: auth.onAuthStateChange,
       builder: (context, _) {
-        return auth.currentSession == null
-            ? const AuthScreen()
-            : const HomeShell();
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 500),
+          switchInCurve: Curves.easeOutCubic,
+          child: auth.currentSession == null
+              ? const AuthScreen(key: ValueKey('auth'))
+              : const HomeShell(key: ValueKey('home')),
+        );
       },
     );
   }
