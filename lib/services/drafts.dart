@@ -41,6 +41,14 @@ class Draft {
 
 /// Drafts live on the phone only, until they are posted.
 class DraftStore {
+  static Draft? _pending;
+  static void setPending(Draft d) => _pending = d;
+  static Draft? takePending() {
+    final d = _pending;
+    _pending = null;
+    return d;
+  }
+
   static Future<File> _file() async {
     final d = await getApplicationDocumentsDirectory();
     return File('${d.path}/drafts.json');

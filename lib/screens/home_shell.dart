@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/drafts.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass.dart';
 import 'feed_page.dart';
@@ -36,7 +37,10 @@ class _HomeShellState extends State<HomeShell> {
       case 2:
         return RecordPage(onPosted: () => setState(() => _i = 0));
       case 4:
-        return const ProfilePage();
+        return ProfilePage(onOpenDraft: (d) {
+          DraftStore.setPending(d);
+          setState(() => _i = 2);
+        });
       default:
         return _Soon(_labels[i]);
     }

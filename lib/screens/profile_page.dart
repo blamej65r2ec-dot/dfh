@@ -14,12 +14,14 @@ import '../widgets/avatar.dart';
 import '../widgets/glass.dart';
 import '../widgets/pill_chip.dart';
 import '../widgets/voice_list.dart';
+import 'settings_page.dart';
 
 const _voiceCols =
     'id,user_id,audio_path,caption,mood,duration_ms,created_at,profiles(username,nickname,avatar_path)';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  const ProfilePage({super.key, this.onOpenDraft});
+  final void Function(Draft draft)? onOpenDraft;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -234,7 +236,10 @@ class _ProfilePageState extends State<ProfilePage> {
             for (final d in _drafts)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: GlassBox(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => widget.onOpenDraft?.call(d),
+                  child: GlassBox(
                   radius: 28,
                   padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
                   child: Row(
@@ -269,11 +274,12 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
+                  ),
                 ),
               ),
             const Padding(
               padding: EdgeInsets.only(top: 4),
-              child: Text('Open Record to post a draft.',
+              child: Text('Tap a draft to edit and post it.',
                   style: TextStyle(fontSize: 13)),
             ),
           ],
@@ -322,6 +328,16 @@ class _ProfilePageState extends State<ProfilePage> {
         child: ListView(
           padding: EdgeInsets.fromLTRB(20, 20, 20, pageBottomPad(context)),
           children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                tooltip: 'Settings',
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
+                ),
+              ),
+            ),
             FadeSlideIn(
               child: Column(
                 children: [
@@ -459,13 +475,6 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const SizedBox(height: 16),
             _tabContent(),
-            const SizedBox(height: 24),
-            Center(
-              child: TextButton(
-                onPressed: () => _c.auth.signOut(),
-                child: const Text('Sign out'),
-              ),
-            ),
           ],
         ),
       ),

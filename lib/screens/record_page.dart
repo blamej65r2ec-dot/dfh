@@ -55,6 +55,10 @@ class _RecordPageState extends State<RecordPage> {
         setState(() => _previewPlaying = pl);
       }
     });
+    final pending = DraftStore.takePending();
+    if (pending != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadDraft(pending));
+    }
   }
 
   @override
@@ -184,21 +188,15 @@ class _RecordPageState extends State<RecordPage> {
     _reset();
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Saved to drafts')));
+        .showSnackBar(const SnackBar(content: Text('Saved. Find it in Drafts on your profile.')));
   }
 
-  Future<void> _openDrafts() async {
-    final d = await showModalBottomSheet<Draft>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => const _DraftsSheet(),
-    );
-    if (d == null) return;
+  Future<void> _loadDraft(Draft d) async {
     try {
       await _preview.setFilePath(d.path);
     } catch (_) {}
     _caption.text = d.caption;
+    if (!mounted) return;
     setState(() {
       _path = d.path;
       _draftId = d.id;
@@ -288,12 +286,6 @@ class _RecordPageState extends State<RecordPage> {
               child: Icon(Icons.mic_rounded, size: 52, color: cs.onPrimary),
             ),
           ),
-        ),
-        const SizedBox(height: 32),
-        TextButton.icon(
-          onPressed: _openDrafts,
-          icon: const Icon(Icons.folder_open_rounded),
-          label: const Text('Drafts'),
         ),
         if (_error != null) ...[
           const SizedBox(height: 12),
@@ -496,94 +488,6 @@ class _RecordPageState extends State<RecordPage> {
               ),
             ),
             child: view,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DraftsSheet extends StatefulWidget {
-  const _DraftsSheet();
-
-  @override
-  State<_DraftsSheet> createState() => _DraftsSheetState();
-}
-
-class _DraftsSheetState extends State<_DraftsSheet> {
-  List<Draft>? _list;
-
-  @override
-  void initState() {
-    super.initState();
-    _refresh();
-  }
-
-  Future<void> _refresh() async {
-    final l = await DraftStore.load();
-    if (mounted) setState(() => _list = l);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final list = _list;
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: GlassBox(
-        radius: 32,
-        padding: const EdgeInsets.fromLTRB(20, 20, 12, 12),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Drafts',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 12),
-              if (list == null)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (list.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: Text('No drafts yet')),
-                )
-              else
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      for (final d in list)
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Text(
-                            d.mood == null ? '🎙️' : moodOf(d.mood!).emoji,
-                            style: const TextStyle(fontSize: 28),
-                          ),
-                          title: Text(
-                            d.caption.isEmpty ? 'No caption' : d.caption,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(fmtDuration(d.durationMs)),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded),
-                            onPressed: () async {
-                              await DraftStore.removeById(d.id,
-                                  deleteAudio: true);
-                              _refresh();
-                            },
-                          ),
-                          onTap: () => Navigator.of(context).pop(d),
-                        ),
-                    ],
-                  ),
-                ),
-            ],
           ),
         ),
       ),
