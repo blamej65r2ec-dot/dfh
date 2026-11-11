@@ -24,6 +24,11 @@ jobs:
       - name: Generate the Android project files
         run: flutter create --platforms=android --org com.voiceapp --project-name voice_app .
 
+      - name: Set minSdk for the audio plugins
+        run: |
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/; s/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/' android/app/build.gradle*
+          grep -n "minSdk" android/app/build.gradle*
+
       - name: Add internet and microphone permissions
         run: |
           sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <application#' android/app/src/main/AndroidManifest.xml
