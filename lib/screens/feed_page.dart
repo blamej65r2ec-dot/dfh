@@ -58,7 +58,7 @@ class _FeedPageState extends State<FeedPage> {
       var q = _c
           .from('voices')
           .select(
-              'id,user_id,audio_path,caption,mood,duration_ms,created_at,profiles(username,nickname)')
+              'id,user_id,audio_path,caption,mood,duration_ms,created_at,profiles(username,nickname,avatar_path)')
           .eq('kind', 'post');
       if (ids != null) q = q.inFilter('user_id', ids);
       if (_mood != null) q = q.eq('mood', _mood!);

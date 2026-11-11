@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../widgets/animations.dart';
 import '../widgets/glass.dart';
 import 'feed_page.dart';
+import 'profile_page.dart';
 import 'record_page.dart';
 import 'search_page.dart';
 
@@ -155,47 +155,6 @@ class _Soon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: FadeSlideIn(child: Text('$name: coming next')),
-    );
-  }
-}
-
-class ProfilePage extends StatelessWidget {
-  const ProfilePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final client = Supabase.instance.client;
-    final uid = client.auth.currentUser?.id;
-    return SafeArea(
-      child: Center(
-        child: FutureBuilder<Map<String, dynamic>>(
-          future: client.from('profiles').select().eq('id', uid ?? '').single(),
-          builder: (context, snap) {
-            final name = snap.hasData ? '@${snap.data!['username']}' : '...';
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FadeSlideIn(
-                  child: Text(name,
-                      style: Theme.of(context).textTheme.headlineSmall),
-                ),
-                const SizedBox(height: 16),
-                FadeSlideIn(
-                  delay: const Duration(milliseconds: 120),
-                  child: PressScale(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                          minimumSize: const Size(160, 50)),
-                      onPressed: () => client.auth.signOut(),
-                      child: const Text('Sign out'),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
     );
   }
 }

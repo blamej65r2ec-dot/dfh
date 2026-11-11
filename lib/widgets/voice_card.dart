@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../services/common.dart';
 import '../services/voice_player.dart';
+import 'avatar.dart';
 import 'glass.dart';
 import 'waveform.dart';
 
@@ -53,6 +54,12 @@ class VoiceCard extends StatelessWidget {
             padding: const EdgeInsets.only(right: 8),
             child: Row(
               children: [
+                Avatar(
+                  name: nick.isNotEmpty ? nick : username,
+                  path: profile['avatar_path'] as String?,
+                  size: 42,
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

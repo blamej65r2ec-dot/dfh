@@ -8,6 +8,7 @@ import '../services/common.dart';
 import '../services/follows.dart';
 import '../services/voice_player.dart';
 import '../widgets/animations.dart';
+import '../widgets/avatar.dart';
 import '../widgets/glass.dart';
 import '../widgets/pill_chip.dart';
 import '../widgets/voice_list.dart';
@@ -72,7 +73,7 @@ class _SearchPageState extends State<SearchPage> {
           final uid = _c.auth.currentUser!.id;
           final rows = await _c
               .from('profiles')
-              .select('id,username,nickname')
+              .select('id,username,nickname,avatar_path')
               .or('username.ilike.%$q%,nickname.ilike.%$q%')
               .neq('id', uid)
               .limit(30);
@@ -85,7 +86,7 @@ class _SearchPageState extends State<SearchPage> {
           var query = _c
               .from('voices')
               .select(
-                  'id,user_id,audio_path,caption,mood,duration_ms,created_at,profiles(username,nickname)')
+                  'id,user_id,audio_path,caption,mood,duration_ms,created_at,profiles(username,nickname,avatar_path)')
               .eq('kind', 'post');
           if (q.isNotEmpty) query = query.ilike('caption', '%$q%');
           if (_mood != null) query = query.eq('mood', _mood!);
@@ -141,19 +142,10 @@ class _SearchPageState extends State<SearchPage> {
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Row(
             children: [
-              Container(
-                width: 46,
-                height: 46,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: cs.onSurface.withAlpha(30),
-                ),
-                child: Text(
-                  shown.isEmpty ? '?' : shown[0].toUpperCase(),
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w800),
-                ),
+              Avatar(
+                name: shown,
+                path: p['avatar_path'] as String?,
+                size: 46,
               ),
               const SizedBox(width: 12),
               Expanded(
