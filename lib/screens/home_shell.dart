@@ -84,7 +84,7 @@ class _HomeShellState extends State<HomeShell> {
                         children: [
                           AnimatedPositioned(
                             duration: const Duration(milliseconds: 380),
-                            curve: Curves.easeOutBack,
+                            curve: Curves.easeOutCubic,
                             left: _i * step,
                             child: Container(
                               width: 52,
@@ -117,7 +117,7 @@ class _HomeShellState extends State<HomeShell> {
                                   icon: AnimatedScale(
                                     scale: k == _i ? 1.12 : 1,
                                     duration: const Duration(milliseconds: 250),
-                                    curve: Curves.easeOutBack,
+                                    curve: Curves.easeOutCubic,
                                     child: TweenAnimationBuilder<Color?>(
                                       tween: ColorTween(
                                         end: k == _i
