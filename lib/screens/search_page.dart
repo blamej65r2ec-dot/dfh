@@ -12,6 +12,7 @@ import '../widgets/avatar.dart';
 import '../widgets/glass.dart';
 import '../widgets/pill_chip.dart';
 import '../widgets/voice_list.dart';
+import 'user_profile_page.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -137,7 +138,16 @@ class _SearchPageState extends State<SearchPage> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: FadeSlideIn(
-        child: GlassBox(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            FocusScope.of(context).unfocus();
+            VoicePlayer.instance.stop();
+            Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => UserProfilePage(userId: id),
+            ));
+          },
+          child: GlassBox(
           radius: 28,
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Row(
@@ -189,6 +199,7 @@ class _SearchPageState extends State<SearchPage> {
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),

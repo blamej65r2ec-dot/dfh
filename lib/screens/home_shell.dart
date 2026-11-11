@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../services/drafts.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass.dart';
+import 'chat_page.dart';
 import 'feed_page.dart';
 import 'profile_page.dart';
 import 'record_page.dart';
@@ -23,10 +24,10 @@ class _HomeShellState extends State<HomeShell> {
     Icons.home_rounded,
     Icons.search_rounded,
     Icons.add_rounded,
-    Icons.notifications_none_rounded,
+    Icons.chat_bubble_outline_rounded,
     Icons.person_outline_rounded,
   ];
-  static const _labels = ['Home', 'Search', 'Record', 'Alerts', 'Profile'];
+  static const _labels = ['Home', 'Search', 'Record', 'Chat', 'Profile'];
 
   Widget _page(int i) {
     switch (i) {
@@ -36,6 +37,8 @@ class _HomeShellState extends State<HomeShell> {
         return const SearchPage();
       case 2:
         return RecordPage(onPosted: () => setState(() => _i = 0));
+      case 3:
+        return const ChatPage();
       case 4:
         return ProfilePage(onOpenDraft: (d) {
           DraftStore.setPending(d);

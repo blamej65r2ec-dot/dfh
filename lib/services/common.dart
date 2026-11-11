@@ -42,3 +42,12 @@ double pageBottomPad(BuildContext context) {
   final kb = m.viewInsets.bottom;
   return kb > 0 ? kb + 24 : 130 + m.padding.bottom;
 }
+
+String timeAgo(DateTime t) {
+  final d = DateTime.now().difference(t.toLocal());
+  if (d.inMinutes < 1) return 'now';
+  if (d.inMinutes < 60) return '${d.inMinutes}m';
+  if (d.inHours < 24) return '${d.inHours}h';
+  if (d.inDays < 7) return '${d.inDays}d';
+  return '${(d.inDays / 7).floor()}w';
+}

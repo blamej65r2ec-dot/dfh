@@ -6,6 +6,7 @@ import '../services/voice_player.dart';
 import '../widgets/animations.dart';
 import '../widgets/pill_chip.dart';
 import '../widgets/voice_list.dart';
+import 'notifications_page.dart';
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -101,12 +102,27 @@ class _FeedPageState extends State<FeedPage> {
           padding: EdgeInsets.fromLTRB(20, 16, 20, pageBottomPad(context)),
           children: [
             FadeSlideIn(
-              child: Text(
-                greeting(),
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineMedium
-                    ?.copyWith(fontWeight: FontWeight.w800),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      greeting(),
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Notifications',
+                    icon: const Icon(Icons.notifications_none_rounded, size: 28),
+                    onPressed: () {
+                      VoicePlayer.instance.stop();
+                      Navigator.of(context).push(MaterialPageRoute<void>(
+                          builder: (_) => const NotificationsPage()));
+                    },
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),

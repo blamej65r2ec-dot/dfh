@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/settings.dart';
 import '../widgets/animations.dart';
+import '../widgets/avatar.dart';
 import '../widgets/glass.dart';
 import '../widgets/pill_chip.dart';
 
@@ -17,6 +18,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _c = Supabase.instance.client;
   int _storyHours = 24;
   bool _saveArchive = true;
+  bool _readReceipts = true;
   bool _loaded = false;
 
   @override
@@ -29,13 +31,14 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final p = await _c
           .from('profiles')
-          .select('story_hours,save_archive')
+          .select('story_hours,save_archive,read_receipts')
           .eq('id', _c.auth.currentUser!.id)
           .single();
       if (!mounted) return;
       setState(() {
         _storyHours = (p['story_hours'] as int?) ?? 24;
         _saveArchive = (p['save_archive'] as bool?) ?? true;
+        _readReceipts = (p['read_receipts'] as bool?) ?? true;
         _loaded = true;
       });
     } catch (_) {
@@ -208,6 +211,52 @@ class _SettingsPageState extends State<SettingsPage> {
             delay: 120,
           ),
           _section(
+            'Privacy',
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(child: Text('Show Seen in chats')),
+                    Switch(
+                      value: _readReceipts,
+                      onChanged: (v) {
+                        setState(() => _readReceipts = v);
+                        _update({'read_receipts': v});
+                      },
+                    ),
+                  ],
+                ),
+                Text(
+                  'If you turn this off, nobody sees when you have seen their messages, and you will not see when they have seen yours.',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withAlpha(150)),
+                ),
+                const SizedBox(height: 10),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const BlockedPage()),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(child: Text('Blocked accounts')),
+                    Icon(Icons.chevron_right_rounded),
+                  ],
+                ),
+              ),
+            ),
+              ],
+            ),
+            delay: 150,
+          ),
+          _section(
             'Account',
             SizedBox(
               width: double.infinity,
@@ -222,6 +271,120 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class BlockedPage extends StatefulWidget {
+  const BlockedPage({super.key});
+
+  @override
+  State<BlockedPage> createState() => _BlockedPageState();
+}
+
+class _BlockedPageState extends State<BlockedPage> {
+  final _c = Supabase.instance.client;
+  List<Map<String, dynamic>>? _list;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final rows = await _c
+          .from('blocks')
+          .select('blocked_id')
+          .eq('blocker_id', _c.auth.currentUser!.id);
+      final ids = [for (final r in rows) r['blocked_id'] as String];
+      var profiles = <Map<String, dynamic>>[];
+      if (ids.isNotEmpty) {
+        final ps = await _c
+            .from('profiles')
+            .select('id,username,nickname,avatar_path')
+            .inFilter('id', ids);
+        profiles = List<Map<String, dynamic>>.from(ps);
+      }
+      if (mounted) setState(() => _list = profiles);
+    } catch (_) {
+      if (mounted) setState(() => _list = []);
+    }
+  }
+
+  Future<void> _unblock(String id) async {
+    try {
+      await _c
+          .from('blocks')
+          .delete()
+          .eq('blocker_id', _c.auth.currentUser!.id)
+          .eq('blocked_id', id);
+      if (mounted) {
+        setState(() => _list = _list?.where((p) => p['id'] != id).toList());
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not unblock')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final list = _list;
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        elevation: 0,
+        foregroundColor: cs.onSurface,
+        title: const Text('Blocked accounts',
+            style: TextStyle(fontWeight: FontWeight.w800)),
+      ),
+      body: list == null
+          ? const Center(child: CircularProgressIndicator())
+          : list.isEmpty
+              ? const Center(child: Text('You have not blocked anyone.'))
+              : ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    for (final p in list)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: GlassBox(
+                          radius: 28,
+                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                          child: Row(
+                            children: [
+                              Avatar(
+                                name: ((p['nickname'] as String?) ?? '')
+                                        .isNotEmpty
+                                    ? p['nickname'] as String
+                                    : ((p['username'] as String?) ?? ''),
+                                path: p['avatar_path'] as String?,
+                                size: 44,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  '@${p['username'] ?? ''}',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => _unblock(p['id'] as String),
+                                child: const Text('Unblock'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
     );
   }
 }

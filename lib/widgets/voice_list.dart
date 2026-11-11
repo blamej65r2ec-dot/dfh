@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../screens/user_profile_page.dart';
+import '../services/voice_player.dart';
 import 'animations.dart';
+import 'report_sheet.dart';
 import 'voice_card.dart';
 
 /// A non-scrolling list of voice cards that handles like and repost state.
@@ -18,6 +21,7 @@ class _VoiceListState extends State<VoiceList> {
   final _c = Supabase.instance.client;
   Set<String> _liked = {};
   Set<String> _reposted = {};
+  final Set<String> _hidden = {};
 
   @override
   void initState() {
@@ -71,9 +75,43 @@ class _VoiceListState extends State<VoiceList> {
     }
   }
 
+  Future<void> _delete(Map<String, dynamic> v) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete this voice?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final id = v['id'] as String;
+    await VoicePlayer.instance.stop();
+    try {
+      await _c.from('voices').delete().eq('id', id);
+      try {
+        await _c.storage.from('voices').remove([v['audio_path'] as String]);
+      } catch (_) {}
+      if (mounted) setState(() => _hidden.add(id));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete that voice')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final items = widget.items;
+    final me = _c.auth.currentUser?.id;
+    final items =
+        widget.items.where((e) => !_hidden.contains(e['id'])).toList();
     return Column(
       children: [
         for (var i = 0; i < items.length; i++)
@@ -90,6 +128,17 @@ class _VoiceListState extends State<VoiceList> {
                     _toggle('likes', items[i]['id'] as String, _liked),
                 onRepost: () =>
                     _toggle('reposts', items[i]['id'] as String, _reposted),
+                onReport: () => showReportSheet(context,
+                    type: 'voice', id: items[i]['id'] as String),
+                onDelete: items[i]['user_id'] == me
+                    ? () => _delete(items[i])
+                    : null,
+                onOpenProfile: items[i]['user_id'] == me
+                    ? null
+                    : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                          builder: (_) => UserProfilePage(
+                              userId: items[i]['user_id'] as String),
+                        )),
               ),
             ),
           ),

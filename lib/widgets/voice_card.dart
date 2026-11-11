@@ -14,6 +14,9 @@ class VoiceCard extends StatelessWidget {
     required this.reposted,
     required this.onLike,
     required this.onRepost,
+    required this.onReport,
+    this.onDelete,
+    this.onOpenProfile,
   });
 
   final Map<String, dynamic> v;
@@ -21,6 +24,9 @@ class VoiceCard extends StatelessWidget {
   final bool reposted;
   final VoidCallback onLike;
   final VoidCallback onRepost;
+  final VoidCallback onReport;
+  final VoidCallback? onDelete;
+  final VoidCallback? onOpenProfile;
 
   Widget _action(IconData on, IconData off, bool active, VoidCallback tap) {
     return IconButton(
@@ -54,31 +60,55 @@ class VoiceCard extends StatelessWidget {
             padding: const EdgeInsets.only(right: 8),
             child: Row(
               children: [
-                Avatar(
-                  name: nick.isNotEmpty ? nick : username,
-                  path: profile['avatar_path'] as String?,
-                  size: 42,
-                ),
-                const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        nick.isNotEmpty ? nick : '@$username',
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w700),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onOpenProfile,
+                    child: Row(
+                      children: [
+                    Avatar(
+                      name: nick.isNotEmpty ? nick : username,
+                      path: profile['avatar_path'] as String?,
+                      size: 42,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            nick.isNotEmpty ? nick : '@$username',
+                            style: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w700),
+                          ),
+                          if (nick.isNotEmpty)
+                            Text('@$username',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: cs.onSurface.withAlpha(150))),
+                        ],
                       ),
-                      if (nick.isNotEmpty)
-                        Text('@$username',
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: cs.onSurface.withAlpha(150))),
-                    ],
+                    ),
+                      ],
+                    ),
                   ),
                 ),
                 Text(moodOf(v['mood'] as String).emoji,
                     style: const TextStyle(fontSize: 30)),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_horiz_rounded),
+                  padding: EdgeInsets.zero,
+                  onSelected: (a) {
+                    if (a == 'report') onReport();
+                    if (a == 'delete') onDelete?.call();
+                  },
+                  itemBuilder: (_) => [
+                    if (onDelete != null)
+                      const PopupMenuItem(value: 'delete', child: Text('Delete'))
+                    else
+                      const PopupMenuItem(value: 'report', child: Text('Report')),
+                  ],
+                ),
               ],
             ),
           ),
