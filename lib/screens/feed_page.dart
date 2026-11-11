@@ -93,13 +93,12 @@ class _FeedPageState extends State<FeedPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
     return SafeArea(
       bottom: false,
       child: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          padding: EdgeInsets.fromLTRB(20, 16, 20, 130 + bottom),
+          padding: EdgeInsets.fromLTRB(20, 16, 20, pageBottomPad(context)),
           children: [
             FadeSlideIn(
               child: Text(

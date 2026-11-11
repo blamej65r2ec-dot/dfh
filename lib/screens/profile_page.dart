@@ -59,51 +59,80 @@ class _ProfilePageState extends State<ProfilePage> {
       final uid = _c.auth.currentUser!.id;
       final profile =
           await _c.from('profiles').select().eq('id', uid).single();
-      final voices = await _c
-          .from('voices')
-          .select(_voiceCols)
-          .eq('user_id', uid)
-          .eq('kind', 'post')
-          .order('created_at', ascending: false)
-          .limit(50);
-      final reps = await _c
-          .from('reposts')
-          .select('created_at,voices($_voiceCols)')
-          .eq('user_id', uid)
-          .order('created_at', ascending: false)
-          .limit(50);
-      final ids = [for (final v in voices) v['id'] as String];
+
+      // Everything below is optional: if one part fails, the profile still opens.
+      var voices = <Map<String, dynamic>>[];
+      var reposts = <Map<String, dynamic>>[];
       var likesIn = 0;
       var repostsIn = 0;
-      if (ids.isNotEmpty) {
-        final l =
-            await _c.from('likes').select('voice_id').inFilter('voice_id', ids);
-        final r = await _c
+      var drafts = <Draft>[];
+
+      try {
+        final rows = await _c
+            .from('voices')
+            .select(_voiceCols)
+            .eq('user_id', uid)
+            .eq('kind', 'post')
+            .order('created_at', ascending: false)
+            .limit(50);
+        voices = List<Map<String, dynamic>>.from(rows);
+      } catch (_) {}
+
+      try {
+        final rows = await _c
             .from('reposts')
             .select('voice_id')
-            .inFilter('voice_id', ids);
-        likesIn = l.length;
-        repostsIn = r.length;
-      }
-      final drafts = await DraftStore.load();
+            .eq('user_id', uid)
+            .order('created_at', ascending: false)
+            .limit(50);
+        final ids = [for (final r in rows) r['voice_id'] as String];
+        if (ids.isNotEmpty) {
+          final vs = await _c
+              .from('voices')
+              .select(_voiceCols)
+              .inFilter('id', ids);
+          final byId = {for (final v in vs) v['id'] as String: v};
+          reposts = [
+            for (final id in ids)
+              if (byId[id] != null) Map<String, dynamic>.from(byId[id]!),
+          ];
+        }
+      } catch (_) {}
+
+      try {
+        final ids = [for (final v in voices) v['id'] as String];
+        if (ids.isNotEmpty) {
+          final l = await _c
+              .from('likes')
+              .select('voice_id')
+              .inFilter('voice_id', ids);
+          final r = await _c
+              .from('reposts')
+              .select('voice_id')
+              .inFilter('voice_id', ids);
+          likesIn = l.length;
+          repostsIn = r.length;
+        }
+      } catch (_) {}
+
+      try {
+        drafts = await DraftStore.load();
+      } catch (_) {}
+
       if (!mounted) return;
       setState(() {
         _profile = profile;
-        _voices = List<Map<String, dynamic>>.from(voices);
-        _reposts = [
-          for (final r in reps)
-            if (r['voices'] != null)
-              Map<String, dynamic>.from(r['voices'] as Map),
-        ];
+        _voices = voices;
+        _reposts = reposts;
         _likesIn = likesIn;
         _repostsIn = repostsIn;
         _drafts = drafts;
         _loading = false;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Could not load your profile.';
+        _error = 'Could not load your profile.\n$e';
         _loading = false;
       });
     }
@@ -255,7 +284,6 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final bottom = MediaQuery.of(context).padding.bottom;
     final p = _profile;
 
     if (_loading) {
@@ -266,7 +294,11 @@ class _ProfilePageState extends State<ProfilePage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error ?? 'Something went wrong.'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(_error ?? 'Something went wrong.',
+                  textAlign: TextAlign.center),
+            ),
             const SizedBox(height: 12),
             TextButton(onPressed: _load, child: const Text('Try again')),
           ],
@@ -288,7 +320,7 @@ class _ProfilePageState extends State<ProfilePage> {
       child: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, 130 + bottom),
+          padding: EdgeInsets.fromLTRB(20, 20, 20, pageBottomPad(context)),
           children: [
             FadeSlideIn(
               child: Column(

@@ -243,12 +243,11 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
     return SafeArea(
       bottom: false,
       child: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: EdgeInsets.fromLTRB(20, 16, 20, 130 + bottom),
+        padding: EdgeInsets.fromLTRB(20, 16, 20, pageBottomPad(context)),
         children: [
           FadeSlideIn(
             child: Text('Search',

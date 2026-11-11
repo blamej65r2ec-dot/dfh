@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+
 class Mood {
   const Mood(this.key, this.emoji, this.label);
   final String key;
@@ -31,4 +33,12 @@ String greeting() {
   if (h < 17) return 'Good afternoon';
   if (h < 21) return 'Good evening';
   return 'Good night';
+}
+
+/// Bottom padding for scrolling pages: room for the floating nav bar,
+/// or just above the keyboard while it is open.
+double pageBottomPad(BuildContext context) {
+  final m = MediaQuery.of(context);
+  final kb = m.viewInsets.bottom;
+  return kb > 0 ? kb + 24 : 130 + m.padding.bottom;
 }

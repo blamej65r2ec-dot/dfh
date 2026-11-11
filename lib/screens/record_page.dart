@@ -475,7 +475,6 @@ class _RecordPageState extends State<RecordPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
     final view = switch (_phase) {
       _Phase.idle => _idle(context),
       _Phase.recording => _recording(context),
@@ -485,7 +484,7 @@ class _RecordPageState extends State<RecordPage> {
       bottom: false,
       child: Center(
         child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(24, 16, 24, 130 + bottom),
+          padding: EdgeInsets.fromLTRB(24, 16, 24, pageBottomPad(context)),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             switchInCurve: Curves.easeOutCubic,
