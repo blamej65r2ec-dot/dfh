@@ -6,6 +6,7 @@ import '../widgets/animations.dart';
 import '../widgets/glass.dart';
 import 'feed_page.dart';
 import 'record_page.dart';
+import 'search_page.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -30,6 +31,8 @@ class _HomeShellState extends State<HomeShell> {
     switch (i) {
       case 0:
         return const FeedPage();
+      case 1:
+        return const SearchPage();
       case 2:
         return RecordPage(onPosted: () => setState(() => _i = 0));
       case 4:
