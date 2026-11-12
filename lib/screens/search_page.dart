@@ -148,6 +148,7 @@ class _SearchPageState extends State<SearchPage> {
             ));
           },
           child: GlassBox(
+          blur: false,
           radius: 28,
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Row(

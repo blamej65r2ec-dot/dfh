@@ -102,6 +102,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             builder: (_) => UserProfilePage(userId: n['user_id'] as String),
           )),
           child: GlassBox(
+            blur: false,
             radius: 28,
             padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
             child: Row(

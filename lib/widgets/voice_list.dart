@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../screens/user_profile_page.dart';
 import '../services/voice_player.dart';
 import 'animations.dart';
+import 'comments_sheet.dart';
 import 'report_sheet.dart';
 import 'voice_card.dart';
 
@@ -128,6 +129,9 @@ class _VoiceListState extends State<VoiceList> {
                     _toggle('likes', items[i]['id'] as String, _liked),
                 onRepost: () =>
                     _toggle('reposts', items[i]['id'] as String, _reposted),
+                onReply: () => showCommentsSheet(context,
+                    voiceId: items[i]['id'] as String,
+                    ownerId: items[i]['user_id'] as String),
                 onReport: () => showReportSheet(context,
                     type: 'voice', id: items[i]['id'] as String),
                 onDelete: items[i]['user_id'] == me

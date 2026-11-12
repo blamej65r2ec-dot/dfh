@@ -13,9 +13,9 @@ const moods = [
   Mood('sad', '😔', 'Sad'),
   Mood('funny', '😂', 'Funny'),
   Mood('help', '🆘', 'Need help'),
-  Mood('thinking', '🤔', 'Thinking'),
-  Mood('frustrated', '😤', 'Frustrated'),
-  Mood('calm', '😌', 'Calm'),
+  Mood('thinking', '💭', 'Thinking'),
+  Mood('frustrated', '🔥', 'Fired up'),
+  Mood('calm', '🤍', 'Calm'),
 ];
 
 Mood moodOf(String key) =>
@@ -50,4 +50,25 @@ String timeAgo(DateTime t) {
   if (d.inHours < 24) return '${d.inHours}h';
   if (d.inDays < 7) return '${d.inDays}d';
   return '${(d.inDays / 7).floor()}w';
+}
+
+String fmtClock(DateTime t) {
+  final l = t.toLocal();
+  final h = l.hour % 12 == 0 ? 12 : l.hour % 12;
+  final m = l.minute.toString().padLeft(2, '0');
+  return '$h:$m ${l.hour < 12 ? 'AM' : 'PM'}';
+}
+
+String dayLabel(DateTime t) {
+  final l = t.toLocal();
+  final now = DateTime.now();
+  bool same(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+  if (same(l, now)) return 'Today';
+  if (same(l, now.subtract(const Duration(days: 1)))) return 'Yesterday';
+  const mon = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${l.day} ${mon[l.month - 1]}';
 }

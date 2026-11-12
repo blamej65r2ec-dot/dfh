@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../services/common.dart';
-import '../services/voice_player.dart';
 import 'avatar.dart';
 import 'glass.dart';
 import 'waveform.dart';
 
+/// A voice post, as in the design.
 class VoiceCard extends StatelessWidget {
   const VoiceCard({
+    super.key,
     required this.v,
     required this.liked,
     required this.reposted,
     required this.onLike,
     required this.onRepost,
+    required this.onReply,
     required this.onReport,
     this.onDelete,
     this.onOpenProfile,
@@ -24,17 +25,50 @@ class VoiceCard extends StatelessWidget {
   final bool reposted;
   final VoidCallback onLike;
   final VoidCallback onRepost;
+  final VoidCallback onReply;
   final VoidCallback onReport;
   final VoidCallback? onDelete;
   final VoidCallback? onOpenProfile;
 
-  Widget _action(IconData on, IconData off, bool active, VoidCallback tap) {
+  Future<void> _actions(BuildContext context) async {
+    final mine = onDelete != null;
+    final a = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(12),
+        child: GlassBox(
+          radius: 32,
+          padding: const EdgeInsets.fromLTRB(22, 10, 22, 10),
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+                mine ? Icons.delete_outline_rounded : Icons.flag_outlined),
+            title: Text(mine ? 'Delete this voice' : 'Report this voice'),
+            onTap: () => Navigator.of(ctx).pop(mine ? 'delete' : 'report'),
+          ),
+        ),
+      ),
+    );
+    if (a == 'delete') onDelete?.call();
+    if (a == 'report') onReport();
+  }
+
+  Widget _action(BuildContext context, IconData off, IconData on, bool active,
+      VoidCallback tap) {
+    final cs = Theme.of(context).colorScheme;
     return IconButton(
+      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
       onPressed: tap,
       icon: AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),
         transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-        child: Icon(active ? on : off, key: ValueKey(active)),
+        child: Icon(
+          active ? on : off,
+          key: ValueKey(active),
+          size: 24,
+          color: active ? cs.onSurface : cs.onSurface.withAlpha(150),
+        ),
       ),
     );
   }
@@ -47,130 +81,76 @@ class VoiceCard extends StatelessWidget {
     final nick = (profile['nickname'] as String?) ?? '';
     final caption = (v['caption'] as String?) ?? '';
     final id = v['id'] as String;
-    final player = VoicePlayer.instance;
-    final bars = barsFor(id);
+    final when = DateTime.tryParse(v['created_at'] as String? ?? '');
+    final name = nick.isNotEmpty ? nick : '@$username';
 
     return GlassBox(
-      radius: 28,
-      padding: const EdgeInsets.fromLTRB(20, 18, 12, 6),
+      blur: false,
+      radius: 30,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onOpenProfile,
+            onLongPress: () => _actions(context),
             child: Row(
               children: [
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onOpenProfile,
-                    child: Row(
-                      children: [
-                    Avatar(
-                      name: nick.isNotEmpty ? nick : username,
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: cs.onSurface, width: 2),
+                  ),
+                  child: ClipOval(
+                    child: Avatar(
+                      name: name,
                       path: profile['avatar_path'] as String?,
-                      size: 42,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            nick.isNotEmpty ? nick : '@$username',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700),
-                          ),
-                          if (nick.isNotEmpty)
-                            Text('@$username',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: cs.onSurface.withAlpha(150))),
-                        ],
-                      ),
-                    ),
-                      ],
+                      size: 40,
                     ),
                   ),
                 ),
-                Text(moodOf(v['mood'] as String).emoji,
-                    style: const TextStyle(fontSize: 30)),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz_rounded),
-                  padding: EdgeInsets.zero,
-                  onSelected: (a) {
-                    if (a == 'report') onReport();
-                    if (a == 'delete') onDelete?.call();
-                  },
-                  itemBuilder: (_) => [
-                    if (onDelete != null)
-                      const PopupMenuItem(value: 'delete', child: Text('Delete'))
-                    else
-                      const PopupMenuItem(value: 'report', child: Text('Report')),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 16)),
+                      Text(
+                        '@$username${when != null ? ' · ${timeAgo(when)}' : ''}',
+                        style: TextStyle(
+                            fontSize: 13, color: cs.onSurface.withAlpha(150)),
+                      ),
+                    ],
+                  ),
                 ),
+                Text(moodOf(v['mood'] as String).emoji,
+                    style: const TextStyle(fontSize: 28)),
               ],
             ),
           ),
           if (caption.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(caption, style: const TextStyle(fontSize: 15)),
+            const SizedBox(height: 12),
+            Text(caption, style: const TextStyle(fontSize: 15, height: 1.45)),
           ],
-          const SizedBox(height: 14),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                HapticFeedback.selectionClick();
-                player.toggle(id, v['audio_path'] as String);
-              },
-              child: ValueListenableBuilder<String?>(
-                valueListenable: player.currentId,
-                builder: (context, cur, _) {
-                  final active = cur == id;
-                  return ValueListenableBuilder<double>(
-                    valueListenable: player.progress,
-                    builder: (context, p, _) => SizedBox(
-                      height: 56,
-                      width: double.infinity,
-                      child: CustomPaint(
-                        painter: WaveformPainter(
-                          bars: bars,
-                          progress: active ? p : 0,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
+          const SizedBox(height: 12),
+          VoiceWave(id: id, audioPath: v['audio_path'] as String),
+          const SizedBox(height: 4),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              ValueListenableBuilder<String?>(
-                valueListenable: player.currentId,
-                builder: (context, cur, _) => ValueListenableBuilder<bool>(
-                  valueListenable: player.playing,
-                  builder: (context, playing, _) => Icon(
-                    cur == id && playing
-                        ? Icons.pause_rounded
-                        : Icons.play_arrow_rounded,
-                    size: 22,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                fmtDuration(v['duration_ms'] as int),
-                style: TextStyle(color: cs.onSurface.withAlpha(170)),
-              ),
-              const Spacer(),
-              _action(Icons.favorite_rounded, Icons.favorite_border_rounded,
-                  liked, onLike),
-              _action(Icons.repeat_on_rounded, Icons.repeat_rounded, reposted,
-                  onRepost),
+              _action(context, Icons.favorite_border_rounded,
+                  Icons.favorite_rounded, liked, onLike),
+              _action(context, Icons.mode_comment_outlined,
+                  Icons.mode_comment_outlined, false, onReply),
+              _action(context, Icons.repeat_rounded, Icons.repeat_on_rounded,
+                  reposted, onRepost),
             ],
           ),
         ],

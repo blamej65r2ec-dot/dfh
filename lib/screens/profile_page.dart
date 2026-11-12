@@ -7,12 +7,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/common.dart';
 import '../services/drafts.dart';
+import '../services/follows.dart';
 import '../services/options.dart';
 import '../services/voice_player.dart';
 import '../widgets/animations.dart';
 import '../widgets/avatar.dart';
 import '../widgets/glass.dart';
-import '../widgets/pill_chip.dart';
+import '../widgets/segmented_pill.dart';
 import '../widgets/voice_list.dart';
 import 'settings_page.dart';
 
@@ -35,6 +36,7 @@ class _ProfilePageState extends State<ProfilePage> {
   List<Draft> _drafts = [];
   int _likesIn = 0;
   int _repostsIn = 0;
+  int _following = 0;
   int _tab = 0; // 0 voices, 1 reposts, 2 drafts
   bool _loading = true;
   bool _uploading = false;
@@ -68,6 +70,10 @@ class _ProfilePageState extends State<ProfilePage> {
       var likesIn = 0;
       var repostsIn = 0;
       var drafts = <Draft>[];
+      var following = 0;
+      try {
+        following = (await Follows.mine()).length;
+      } catch (_) {}
 
       try {
         final rows = await _c
@@ -129,6 +135,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _likesIn = likesIn;
         _repostsIn = repostsIn;
         _drafts = drafts;
+        _following = following;
         _loading = false;
       });
     } catch (e) {
@@ -188,13 +195,13 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _tag(String text) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        color: cs.onSurface.withAlpha(24),
+        borderRadius: BorderRadius.circular(16),
+        color: cs.onSurface.withAlpha(26),
       ),
       child: Text(text,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
     );
   }
 
@@ -240,6 +247,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   behavior: HitTestBehavior.opaque,
                   onTap: () => widget.onOpenDraft?.call(d),
                   child: GlassBox(
+                  blur: false,
                   radius: 28,
                   padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
                   child: Row(
@@ -330,11 +338,17 @@ class _ProfilePageState extends State<ProfilePage> {
           children: [
             Align(
               alignment: Alignment.centerRight,
-              child: IconButton(
-                tooltip: 'Settings',
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: () => Navigator.of(context).push(
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
+                ),
+                child: GlassBox(
+                  radius: 23,
+                  child: const SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: Icon(Icons.settings_outlined, size: 22),
+                  ),
                 ),
               ),
             ),
@@ -347,21 +361,24 @@ class _ProfilePageState extends State<ProfilePage> {
                       alignment: Alignment.bottomRight,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(4),
+                          width: 96,
+                          height: 96,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border:
-                                Border.all(color: cs.onSurface, width: 2.5),
+                                Border.all(color: cs.onSurface, width: 3),
                           ),
-                          child: Avatar(
-                            name: nick.isNotEmpty ? nick : username,
-                            path: p['avatar_path'] as String?,
-                            size: 96,
+                          child: ClipOval(
+                            child: Avatar(
+                              name: nick.isNotEmpty ? nick : username,
+                              path: p['avatar_path'] as String?,
+                              size: 90,
+                            ),
                           ),
                         ),
                         Container(
-                          width: 32,
-                          height: 32,
+                          width: 30,
+                          height: 30,
                           decoration: BoxDecoration(
                               shape: BoxShape.circle, color: cs.primary),
                           child: _uploading
@@ -371,7 +388,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       strokeWidth: 2, color: cs.onPrimary),
                                 )
                               : Icon(Icons.camera_alt_rounded,
-                                  size: 17, color: cs.onPrimary),
+                                  size: 16, color: cs.onPrimary),
                         ),
                       ],
                     ),
@@ -379,34 +396,17 @@ class _ProfilePageState extends State<ProfilePage> {
                   const SizedBox(height: 14),
                   Text(
                     nick.isNotEmpty ? nick : '@$username',
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.w700),
                   ),
                   if (nick.isNotEmpty)
                     Text('@$username',
-                        style: TextStyle(color: cs.onSurface.withAlpha(160))),
-                  const SizedBox(height: 14),
-                  PressScale(
-                    child: GestureDetector(
-                      onTap: _edit,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 22, vertical: 11),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
-                          color: cs.onSurface.withAlpha(24),
-                        ),
-                        child: const Text('Edit profile',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ),
+                        style: TextStyle(
+                            fontSize: 14, color: cs.onSurface.withAlpha(150))),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             if (hasBio)
               FadeSlideIn(
                 delay: const Duration(milliseconds: 80),
@@ -415,10 +415,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    if (age != null) _tag('$age years'),
+                    if (age != null) _tag('$age'),
                     if (country.isNotEmpty) _tag(country),
                     for (final h in hobbies) _tag(h),
-                    for (final l in langs) _tag(l),
+                    if (langs.isNotEmpty) _tag(langs.join(', ')),
                   ],
                 ),
               )
@@ -427,51 +427,59 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Text('Tap Edit profile to add a few details.',
                     style: TextStyle(color: cs.onSurface.withAlpha(160))),
               ),
-            const SizedBox(height: 20),
-            FadeSlideIn(
-              delay: const Duration(milliseconds: 140),
-              child: GlassBox(
-                radius: 28,
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.lock_outline_rounded, size: 18),
-                        const SizedBox(width: 8),
-                        const Text('Only you can see this',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        _stat('${_voices.length}', 'Voices'),
-                        _stat('$_likesIn', 'Likes'),
-                        _stat('$_repostsIn', 'Reposts'),
-                      ],
-                    ),
-                  ],
+            const SizedBox(height: 14),
+            Center(
+              child: PressScale(
+                child: GestureDetector(
+                  onTap: _edit,
+                  child: GlassBox(
+                    blur: false,
+                    radius: 22,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 22, vertical: 11),
+                    child: const Text('Edit profile',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                PillChip(
-                    label: 'Voices',
-                    selected: _tab == 0,
-                    onTap: () => _setTab(0)),
-                PillChip(
-                    label: 'Reposts',
-                    selected: _tab == 1,
-                    onTap: () => _setTab(1)),
-                PillChip(
-                    label: 'Drafts',
-                    selected: _tab == 2,
-                    onTap: () => _setTab(2)),
-              ],
+            FadeSlideIn(
+              delay: const Duration(milliseconds: 140),
+              child: GlassBox(
+                blur: false,
+                radius: 28,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Row(
+                  children: [
+                    _stat('${_voices.length}', 'Voices'),
+                    _stat('$_following', 'Following'),
+                    _stat('${_reposts.length}', 'Reposts'),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock_outline_rounded,
+                      size: 14, color: cs.onSurface.withAlpha(140)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Only you see: $_likesIn likes · $_repostsIn reposts on your voices',
+                    style: TextStyle(
+                        fontSize: 12, color: cs.onSurface.withAlpha(140)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            SegmentedPill(
+              labels: const ['Voices', 'Reposts', 'Drafts'],
+              selected: _tab,
+              onChanged: _setTab,
             ),
             const SizedBox(height: 16),
             _tabContent(),
@@ -582,6 +590,7 @@ class _EditSheetState extends State<_EditSheet> {
         bottom: MediaQuery.of(context).viewInsets.bottom + 12,
       ),
       child: GlassBox(
+        blur: false,
         radius: 32,
         padding: const EdgeInsets.all(20),
         child: ConstrainedBox(

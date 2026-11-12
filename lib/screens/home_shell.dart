@@ -19,6 +19,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _i = 0;
+  bool _storyMode = false;
 
   static const _icons = [
     Icons.home_rounded,
@@ -32,17 +33,35 @@ class _HomeShellState extends State<HomeShell> {
   Widget _page(int i) {
     switch (i) {
       case 0:
-        return const FeedPage();
+        return FeedPage(
+          onAddStory: () => setState(() {
+            _storyMode = true;
+            _i = 2;
+          }),
+        );
       case 1:
         return const SearchPage();
       case 2:
-        return RecordPage(onPosted: () => setState(() => _i = 0));
+        return RecordPage(
+          storyMode: _storyMode,
+          onPosted: () => setState(() {
+            _storyMode = false;
+            _i = 0;
+          }),
+          onClose: () => setState(() {
+            _storyMode = false;
+            _i = 0;
+          }),
+        );
       case 3:
         return const ChatPage();
       case 4:
         return ProfilePage(onOpenDraft: (d) {
           DraftStore.setPending(d);
-          setState(() => _i = 2);
+          setState(() {
+            _storyMode = false;
+            _i = 2;
+          });
         });
       default:
         return _Soon(_labels[i]);
@@ -120,7 +139,10 @@ class _HomeShellState extends State<HomeShell> {
                                   tooltip: _labels[k],
                                   onPressed: () {
                                     HapticFeedback.selectionClick();
-                                    setState(() => _i = k);
+                                    setState(() {
+                                      if (k != 2) _storyMode = false;
+                                      _i = k;
+                                    });
                                   },
                                   icon: AnimatedScale(
                                     scale: k == _i ? 1.12 : 1,

@@ -9,32 +9,43 @@ class GlassBox extends StatelessWidget {
     required this.child,
     this.radius = 28,
     this.padding = EdgeInsets.zero,
+    this.blur = true,
   });
 
   final Widget child;
   final double radius;
   final EdgeInsetsGeometry padding;
 
+  /// Blur is costly. Lists with many items use blur: false.
+  final bool blur;
+
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final box = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark ? [_w(.15), _w(.05)] : [_w(.78), _w(.34)],
+        ),
+        border: Border.all(color: dark ? _w(.18) : _w(.85)),
+      ),
+      child: child,
+    );
+    if (!blur) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: box,
+      );
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: dark ? [_w(.15), _w(.05)] : [_w(.78), _w(.34)],
-            ),
-            border: Border.all(color: dark ? _w(.18) : _w(.85)),
-          ),
-          child: child,
-        ),
+        child: box,
       ),
     );
   }

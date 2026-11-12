@@ -6,6 +6,7 @@ import '../widgets/animations.dart';
 import '../widgets/avatar.dart';
 import '../widgets/glass.dart';
 import '../widgets/pill_chip.dart';
+import 'story_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -161,41 +162,21 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           _section(
             'Voice stories',
-            Opacity(
-              opacity: _loaded ? 1 : 0.5,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('A story disappears after'),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      for (final h in const [6, 12, 18, 24])
-                        PillChip(
-                          label: '${h}h',
-                          selected: _storyHours == h,
-                          onTap: () {
-                            setState(() => _storyHours = h);
-                            _update({'story_hours': h});
-                          },
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Expanded(
-                          child: Text('Keep expired stories in my archive')),
-                      Switch(
-                        value: _saveArchive,
-                        onChanged: (v) {
-                          setState(() => _saveArchive = v);
-                          _update({'save_archive': v});
-                        },
-                      ),
-                    ],
-                  ),
-                ],
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                    builder: (_) => const StorySettingsPage()),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                        child: Text('Duration, archive and more')),
+                    Icon(Icons.chevron_right_rounded),
+                  ],
+                ),
               ),
             ),
             delay: 60,
@@ -217,7 +198,7 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 Row(
                   children: [
-                    const Expanded(child: Text('Show Seen in chats')),
+                    const Expanded(child: Text('Show Heard in chats')),
                     Switch(
                       value: _readReceipts,
                       onChanged: (v) {
@@ -228,7 +209,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ],
                 ),
                 Text(
-                  'If you turn this off, nobody sees when you have seen their messages, and you will not see when they have seen yours.',
+                  'If you turn this off, nobody sees when you have heard their messages, and you will not see when they have heard yours.',
                   style: TextStyle(
                       fontSize: 12,
                       color: Theme.of(context)

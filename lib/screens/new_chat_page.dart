@@ -115,6 +115,7 @@ class _NewChatPageState extends State<NewChatPage> {
         behavior: HitTestBehavior.opaque,
         onTap: () => openChatWith(context, p, replace: true),
         child: GlassBox(
+          blur: false,
           radius: 28,
           padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
           child: Row(
