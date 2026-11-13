@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config.dart';
 import 'theme.dart';
+import 'services/in_app_notifier.dart';
 import 'services/settings.dart';
 import 'widgets/glass.dart';
 import 'screens/auth_screen.dart';
@@ -31,6 +32,7 @@ class VoiceApp extends StatelessWidget {
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: mode,
+        navigatorKey: InAppNotifier.navKey,
         builder: (context, child) => AppBackground(child: child!),
         home: const AuthGate(),
       ),

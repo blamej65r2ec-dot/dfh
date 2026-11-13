@@ -40,7 +40,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       if (byId.isNotEmpty) {
         final ids = byId.keys.toList();
         const cols =
-            'created_at,user_id,voice_id,profiles(username,nickname,avatar_path)';
+            'created_at,user_id,voice_id,profiles!user_id(username,nickname,avatar_path)';
         final likes = await _c
             .from('likes')
             .select(cols)

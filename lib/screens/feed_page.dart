@@ -35,7 +35,6 @@ class _FeedPageState extends State<FeedPage> {
   bool _loading = true;
   bool _loadingMore = false;
   String? _error;
-  Set<String> _seen = {};
 
   @override
   void initState() {
@@ -59,41 +58,19 @@ class _FeedPageState extends State<FeedPage> {
     }
   }
 
-  void _markSeen(String id) {
-    _seen.add(id);
-    SeenVoices.add(id);
-  }
-
-  /// Gets the next voices you have not seen yet (each voice shows once).
-  Future<List<Map<String, dynamic>>> _fetchUnseen() async {
-    final out = <Map<String, dynamic>>[];
-    for (var round = 0; round < 5 && _more && out.length < 8; round++) {
-      var q = _c
-          .from('voices')
-          .select(voiceCols)
-          .eq('kind', 'post');
+  /// The next voices, newest first. Voices never disappear from the feed.
+  Future<List<Map<String, dynamic>>> _fetchPage() async {
+    final rows = await loadVoices((cols) {
+      var q = _c.from('voices').select(cols).eq('kind', 'post');
       if (_cursor != null) q = q.lt('created_at', _cursor!);
-      List<dynamic> rows;
-      try {
-        rows = await q.order('created_at', ascending: false).limit(_page);
-      } catch (_) {
-        // update4.sql not run yet: load without the privacy column.
-        var q2 = _c.from('voices').select(voiceColsBasic).eq('kind', 'post');
-        if (_cursor != null) q2 = q2.lt('created_at', _cursor!);
-        rows = await q2.order('created_at', ascending: false).limit(_page);
-      }
-      if (rows.isNotEmpty) _cursor = rows.last['created_at'] as String;
-      if (rows.length < _page) _more = false;
-      for (final r in rows) {
-        final id = r['id'] as String;
-        if (_seen.contains(id)) continue;
-        if (_items.any((e) => e['id'] == id) || out.any((e) => e['id'] == id)) {
-          continue;
-        }
-        out.add(Map<String, dynamic>.from(r));
-      }
-    }
-    return out;
+      return q.order('created_at', ascending: false).limit(_page);
+    });
+    if (rows.isNotEmpty) _cursor = rows.last['created_at'] as String;
+    if (rows.length < _page) _more = false;
+    return [
+      for (final r in rows)
+        if (!_items.any((e) => e['id'] == r['id'])) r
+    ];
   }
 
   Future<void> _loadStories() async {
@@ -111,7 +88,6 @@ class _FeedPageState extends State<FeedPage> {
     });
     _loadStories();
     try {
-      _seen = Set<String>.of(await SeenVoices.load());
       _cursor = null;
       _more = true;
       try {
@@ -125,16 +101,16 @@ class _FeedPageState extends State<FeedPage> {
         _myName = nick.isNotEmpty ? nick : (p['username'] as String? ?? '');
       } catch (_) {}
       _items = [];
-      final first = await _fetchUnseen();
+      final first = await _fetchPage();
       if (!mounted) return;
       setState(() {
         _items = first;
         _loading = false;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Could not load voices.';
+        _error = 'Could not load voices.\n$e';
         _loading = false;
       });
     }
@@ -144,18 +120,11 @@ class _FeedPageState extends State<FeedPage> {
     if (_loadingMore || !_more || _loading) return;
     setState(() => _loadingMore = true);
     try {
-      final more = await _fetchUnseen();
+      final more = await _fetchPage();
       if (!mounted) return;
       setState(() => _items = [..._items, ...more]);
     } catch (_) {}
     if (mounted) setState(() => _loadingMore = false);
-  }
-
-  Future<void> _showOlder() async {
-    await SeenVoices.clear();
-    _seen = {};
-    _items = [];
-    await _load();
   }
 
   Future<void> _openStories(int index) async {
@@ -179,13 +148,14 @@ class _FeedPageState extends State<FeedPage> {
   Widget _ring(BuildContext context,
       {required bool unseen, required Widget child}) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: unseen ? cs.onSurface : cs.onSurface.withAlpha(46),
-          width: 2,
+          color: unseen ? kAccent : cs.onSurface.withAlpha(70),
+          width: unseen ? 2.5 : 2,
         ),
       ),
       child: child,
@@ -281,22 +251,22 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
-  Widget _caughtUp(BuildContext context, {bool empty = false}) {
+  Widget _footer(BuildContext context, {bool empty = false}) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: EdgeInsets.only(top: empty ? 50 : 8, bottom: 10),
+      padding: EdgeInsets.only(top: empty ? 60 : 8, bottom: 10),
       child: Column(
         children: [
-          Icon(Icons.check_circle_outline_rounded,
-              size: 34, color: cs.onSurface.withAlpha(120)),
+          Icon(Icons.graphic_eq_rounded,
+              size: 30, color: cs.onSurface.withAlpha(110)),
           const SizedBox(height: 10),
-          Text(empty ? 'No new voices right now' : "You're all caught up",
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
-          Text('You have heard the newest voices.',
-              style: TextStyle(fontSize: 13, color: cs.onSurface.withAlpha(150))),
-          TextButton(
-              onPressed: _showOlder, child: const Text('Show older voices')),
+          Text(
+              empty
+                  ? 'No voices yet. Be the first to speak.'
+                  : "That's everything for now",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 14, color: cs.onSurface.withAlpha(150))),
         ],
       ),
     );
@@ -387,16 +357,16 @@ class _FeedPageState extends State<FeedPage> {
                       ),
                     )
                   else if (_items.isEmpty)
-                    _caughtUp(context, empty: true)
+                    _footer(context, empty: true)
                   else ...[
-                    VoiceList(items: _items, onSeen: _markSeen),
+                    VoiceList(items: _items),
                     if (_loadingMore)
                       const Padding(
                         padding: EdgeInsets.all(20),
                         child: Center(child: CircularProgressIndicator()),
                       )
                     else if (!_more)
-                      _caughtUp(context),
+                      _footer(context),
                   ],
                 ],
               ),

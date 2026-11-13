@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../services/app_events.dart';
 import '../services/drafts.dart';
+import '../services/in_app_notifier.dart';
 import '../services/voice_player.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass.dart';
@@ -29,11 +30,13 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     AppEvents.pagingLocked.addListener(_onLock);
+    InAppNotifier.start();
   }
 
   @override
   void dispose() {
     AppEvents.pagingLocked.removeListener(_onLock);
+    InAppNotifier.stop();
     _pc.dispose();
     super.dispose();
   }

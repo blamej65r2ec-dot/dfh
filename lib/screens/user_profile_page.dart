@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/activity.dart';
 import '../services/follows.dart';
 import '../services/voice_player.dart';
 import '../widgets/animations.dart';
@@ -11,8 +12,6 @@ import '../widgets/report_sheet.dart';
 import '../widgets/voice_list.dart';
 import 'new_chat_page.dart';
 
-const _voiceCols =
-    'id,user_id,audio_path,caption,mood,duration_ms,created_at,profiles(username,nickname,avatar_path)';
 
 class UserProfilePage extends StatefulWidget {
   const UserProfilePage({super.key, required this.userId});
@@ -56,14 +55,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
       var voices = <Map<String, dynamic>>[];
       var following = false;
       try {
-        final rows = await _c
+        voices = await loadVoices((cols) => _c
             .from('voices')
-            .select(_voiceCols)
+            .select(cols)
             .eq('user_id', widget.userId)
             .eq('kind', 'post')
             .order('created_at', ascending: false)
-            .limit(50);
-        voices = List<Map<String, dynamic>>.from(rows);
+            .limit(50));
       } catch (_) {}
       try {
         following = (await Follows.mine()).contains(widget.userId);

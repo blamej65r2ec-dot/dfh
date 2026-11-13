@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/activity.dart';
 import '../services/app_events.dart';
 import '../services/common.dart';
 import '../services/drafts.dart';
@@ -19,8 +20,6 @@ import '../widgets/voice_list.dart';
 import 'follow_list_page.dart';
 import 'settings_page.dart';
 
-const _voiceCols =
-    'id,user_id,audio_path,caption,mood,duration_ms,created_at,profiles(username,nickname,avatar_path)';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key, this.onOpenDraft});
@@ -89,14 +88,13 @@ class _ProfilePageState extends State<ProfilePage> {
       } catch (_) {}
 
       try {
-        final rows = await _c
+        voices = await loadVoices((cols) => _c
             .from('voices')
-            .select(_voiceCols)
+            .select(cols)
             .eq('user_id', uid)
             .eq('kind', 'post')
             .order('created_at', ascending: false)
-            .limit(50);
-        voices = List<Map<String, dynamic>>.from(rows);
+            .limit(50));
       } catch (_) {}
 
       try {
@@ -108,10 +106,8 @@ class _ProfilePageState extends State<ProfilePage> {
             .limit(50);
         final ids = [for (final r in rows) r['voice_id'] as String];
         if (ids.isNotEmpty) {
-          final vs = await _c
-              .from('voices')
-              .select(_voiceCols)
-              .inFilter('id', ids);
+          final vs = await loadVoices(
+              (cols) => _c.from('voices').select(cols).inFilter('id', ids));
           final byId = {for (final v in vs) v['id'] as String: v};
           reposts = [
             for (final id in ids)

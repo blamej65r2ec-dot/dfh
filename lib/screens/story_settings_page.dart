@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/activity.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass.dart';
 import '../widgets/segmented_pill.dart';
@@ -204,15 +205,14 @@ class _ArchivePageState extends State<ArchivePage> {
 
   Future<void> _load() async {
     try {
-      final rows = await _c
+      final rows = await loadVoices((cols) => _c
           .from('voices')
-          .select(
-              'id,user_id,audio_path,caption,mood,duration_ms,created_at,profiles(username,nickname,avatar_path)')
+          .select(cols)
           .eq('user_id', _c.auth.currentUser!.id)
           .eq('kind', 'story')
           .lt('expires_at', DateTime.now().toUtc().toIso8601String())
           .order('created_at', ascending: false)
-          .limit(60);
+          .limit(60));
       if (mounted) setState(() => _items = List<Map<String, dynamic>>.from(rows));
     } catch (_) {
       if (mounted) setState(() => _items = _items ?? []);

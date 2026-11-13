@@ -226,7 +226,7 @@ class _MyRepliesPageState extends State<MyRepliesPage> {
         try {
           final vs = await _c
               .from('voices')
-              .select('id,profiles(username,nickname)')
+              .select('id,profiles!user_id(username,nickname)')
               .inFilter('id', vids);
           for (final v in vs) {
             final p = (v['profiles'] as Map?) ?? const {};

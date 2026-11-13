@@ -1,5 +1,8 @@
 import 'package:flutter/widgets.dart';
 
+/// The one accent colour of the app (new stories, highlights).
+const kAccent = Color(0xFF3D8BFF);
+
 class Mood {
   const Mood(this.key, this.emoji, this.label);
   final String key;

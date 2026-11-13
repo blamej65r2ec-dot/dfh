@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/activity.dart';
 import '../services/common.dart';
 import '../services/follows.dart';
 import '../services/voice_player.dart';
@@ -84,15 +85,12 @@ class _SearchPageState extends State<SearchPage> {
         if (q.isEmpty && _mood == null) {
           _voices = [];
         } else {
-          var query = _c
-              .from('voices')
-              .select(
-                  'id,user_id,audio_path,caption,mood,duration_ms,created_at,profiles(username,nickname,avatar_path)')
-              .eq('kind', 'post');
-          if (q.isNotEmpty) query = query.ilike('caption', '%$q%');
-          if (_mood != null) query = query.eq('mood', _mood!);
-          final rows =
-              await query.order('created_at', ascending: false).limit(40);
+          final rows = await loadVoices((cols) {
+            var query = _c.from('voices').select(cols).eq('kind', 'post');
+            if (q.isNotEmpty) query = query.ilike('caption', '%$q%');
+            if (_mood != null) query = query.eq('mood', _mood!);
+            return query.order('created_at', ascending: false).limit(40);
+          });
           _voices = List<Map<String, dynamic>>.from(rows);
         }
       }

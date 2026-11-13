@@ -1,10 +1,48 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const voiceCols =
-    'id,user_id,audio_path,caption,mood,duration_ms,created_at,visibility,profiles(username,nickname,avatar_path)';
-const voiceColsBasic =
-    'id,user_id,audio_path,caption,mood,duration_ms,created_at,profiles(username,nickname,avatar_path)';
+const voiceBase = 'id,user_id,audio_path,caption,mood,duration_ms,created_at';
+const profileEmbed = 'profiles!user_id(username,nickname,avatar_path)';
+const voiceCols = '$voiceBase,$profileEmbed';
+
+/// Adds each voice's author (name, photo) without using a database join.
+Future<List<Map<String, dynamic>>> attachProfiles(List<dynamic> rows) async {
+  final list = [for (final r in rows) Map<String, dynamic>.from(r as Map)];
+  final ids = {for (final r in list) r['user_id'] as String}.toList();
+  if (ids.isEmpty) return list;
+  final ps = await Supabase.instance.client
+      .from('profiles')
+      .select('id,username,nickname,avatar_path')
+      .inFilter('id', ids);
+  final byId = {for (final p in ps) p['id'] as String: p};
+  for (final r in list) {
+    final p = byId[r['user_id']];
+    r['profiles'] = p == null
+        ? <String, dynamic>{}
+        : {
+            'username': p['username'],
+            'nickname': p['nickname'],
+            'avatar_path': p['avatar_path'],
+          };
+  }
+  return list;
+}
+
+/// Runs a voices query. If the database join fails, it runs again without
+/// the join and adds the authors by itself, so voices always show up.
+Future<List<Map<String, dynamic>>> loadVoices(
+  Future<dynamic> Function(String cols) run, {
+  String extra = '',
+}) async {
+  final base = extra.isEmpty ? voiceBase : '$voiceBase,$extra';
+  try {
+    final rows = await run('$base,$profileEmbed');
+    return [for (final r in rows as List) Map<String, dynamic>.from(r as Map)];
+  } catch (_) {
+    final rows = await run(base);
+    return attachProfiles(rows as List);
+  }
+}
 
 class Activity {
   static SupabaseClient get _c => Supabase.instance.client;
@@ -26,16 +64,12 @@ class Activity {
   static Future<List<Map<String, dynamic>>> voicesByIds(
       List<String> ids) async {
     if (ids.isEmpty) return [];
-    List<dynamic> rows;
-    try {
-      rows = await _c.from('voices').select(voiceCols).inFilter('id', ids);
-    } catch (_) {
-      rows = await _c.from('voices').select(voiceColsBasic).inFilter('id', ids);
-    }
+    final rows = await loadVoices(
+        (cols) => _c.from('voices').select(cols).inFilter('id', ids));
     final byId = {for (final r in rows) r['id'] as String: r};
     return [
       for (final id in ids)
-        if (byId[id] != null) Map<String, dynamic>.from(byId[id] as Map),
+        if (byId[id] != null) byId[id]!,
     ];
   }
 }

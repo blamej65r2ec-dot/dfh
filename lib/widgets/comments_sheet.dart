@@ -50,7 +50,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       final rows = await _c
           .from('comments')
           .select(
-              'id,user_id,audio_path,duration_ms,created_at,profiles(username,nickname,avatar_path)')
+              'id,user_id,audio_path,duration_ms,created_at,profiles!user_id(username,nickname,avatar_path)')
           .eq('voice_id', widget.voiceId)
           .order('created_at', ascending: true)
           .limit(100);

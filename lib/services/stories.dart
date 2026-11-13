@@ -1,10 +1,10 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'activity.dart';
 import 'follows.dart';
 
-const storyCols =
-    'id,user_id,audio_path,caption,mood,duration_ms,created_at,expires_at,profiles(username,nickname,avatar_path)';
+const storyExtra = 'expires_at';
 
 class StoryGroup {
   StoryGroup({
@@ -60,14 +60,17 @@ class Stories {
     try {
       ids.addAll(await Follows.mine());
     } catch (_) {}
-    final rows = await _c
-        .from('voices')
-        .select(storyCols)
-        .eq('kind', 'story')
-        .gt('expires_at', DateTime.now().toUtc().toIso8601String())
-        .inFilter('user_id', ids.toList())
-        .order('created_at', ascending: true)
-        .limit(200);
+    final rows = await loadVoices(
+      (cols) => _c
+          .from('voices')
+          .select(cols)
+          .eq('kind', 'story')
+          .gt('expires_at', DateTime.now().toUtc().toIso8601String())
+          .inFilter('user_id', ids.toList())
+          .order('created_at', ascending: true)
+          .limit(200),
+      extra: storyExtra,
+    );
     final seenIds = await seen();
     final byUser = <String, List<Map<String, dynamic>>>{};
     for (final r in rows) {

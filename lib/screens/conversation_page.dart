@@ -9,6 +9,7 @@ import 'package:record/record.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/common.dart';
+import '../services/in_app_notifier.dart';
 import '../services/voice_player.dart';
 import '../widgets/avatar.dart';
 import '../widgets/glass.dart';
@@ -92,6 +93,7 @@ class _ConversationPageState extends State<ConversationPage> {
   @override
   void initState() {
     super.initState();
+    InAppNotifier.activeConversationId = widget.conversationId;
     _fetch();
     _poll = Timer.periodic(const Duration(seconds: 10), (_) => _fetch());
     _ch = _c.channel('chat:${widget.conversationId}');
@@ -128,6 +130,9 @@ class _ConversationPageState extends State<ConversationPage> {
 
   @override
   void dispose() {
+    if (InAppNotifier.activeConversationId == widget.conversationId) {
+      InAppNotifier.activeConversationId = null;
+    }
     _poll?.cancel();
     _tick?.cancel();
     _beat?.cancel();
