@@ -6,6 +6,7 @@ import '../widgets/animations.dart';
 import '../widgets/avatar.dart';
 import '../widgets/glass.dart';
 import '../widgets/pill_chip.dart';
+import 'activity_pages.dart';
 import 'story_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -105,6 +106,22 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Widget _navRow(String label, VoidCallback onTap) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Expanded(child: Text(label)),
+            const Icon(Icons.chevron_right_rounded),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _soonRow(String label, String value) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
@@ -158,6 +175,21 @@ class _SettingsPageState extends State<SettingsPage> {
                       onTap: () => AppSettings.setTheme(ThemeMode.dark)),
                 ],
               ),
+            ),
+          ),
+          _section(
+            'Your activity',
+            Column(
+              children: [
+                _navRow('Liked voices', () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const LikedVoicesPage()))),
+                _navRow('Your voice replies', () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const MyRepliesPage()))),
+                _navRow('Saved voices', () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const SavedVoicesPage()))),
+                _navRow('Voice history', () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const VoiceHistoryPage()))),
+              ],
             ),
           ),
           _section(

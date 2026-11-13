@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'activity.dart';
+
 /// One shared player so only one voice plays at a time.
 class VoicePlayer {
   VoicePlayer._();
@@ -62,6 +64,7 @@ class VoicePlayer {
     progress.value = 0;
     position.value = Duration.zero;
     duration.value = Duration.zero;
+    Activity.recordView(id);
     try {
       final url = await Supabase.instance.client.storage
           .from('voices')

@@ -15,6 +15,7 @@ dependencies:
   path_provider: ^2.1.4
   image_picker: ^1.1.2
   shared_preferences: ^2.3.2
+  visibility_detector: ^0.4.0+2
 
 flutter:
   uses-material-design: true

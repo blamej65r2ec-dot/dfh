@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 import '../screens/user_profile_page.dart';
+import '../services/app_events.dart';
 import '../services/voice_player.dart';
 import 'animations.dart';
 import 'comments_sheet.dart';
@@ -11,8 +13,11 @@ import 'voice_card.dart';
 
 /// A non-scrolling list of voice cards that handles like and repost state.
 class VoiceList extends StatefulWidget {
-  const VoiceList({super.key, required this.items});
+  const VoiceList({super.key, required this.items, this.onSeen});
   final List<Map<String, dynamic>> items;
+
+  /// Called once a voice has been on screen (used by the feed).
+  final void Function(String id)? onSeen;
 
   @override
   State<VoiceList> createState() => _VoiceListState();
@@ -22,6 +27,9 @@ class _VoiceListState extends State<VoiceList> {
   final _c = Supabase.instance.client;
   Set<String> _liked = {};
   Set<String> _reposted = {};
+  Set<String> _saved = {};
+  final Map<String, List<int>> _counts = {};
+  final Set<String> _seenSent = {};
   final Set<String> _hidden = {};
 
   @override
@@ -51,10 +59,57 @@ class _VoiceListState extends State<VoiceList> {
           .select('voice_id')
           .eq('user_id', uid)
           .inFilter('voice_id', ids);
+      var saved = <String>{};
+      try {
+        final sv = await _c
+            .from('saves')
+            .select('voice_id')
+            .eq('user_id', uid)
+            .inFilter('voice_id', ids);
+        saved = {for (final x in sv) x['voice_id'] as String};
+      } catch (_) {}
+      // Counts are only for you, on your own voices.
+      final mineIds = [
+        for (final v in widget.items)
+          if (v['user_id'] == uid) v['id'] as String
+      ];
+      final counts = <String, List<int>>{};
+      if (mineIds.isNotEmpty) {
+        try {
+          final lk = await _c
+              .from('likes')
+              .select('voice_id')
+              .inFilter('voice_id', mineIds);
+          final rp = await _c
+              .from('reposts')
+              .select('voice_id')
+              .inFilter('voice_id', mineIds);
+          final cm = await _c
+              .from('comments')
+              .select('voice_id')
+              .inFilter('voice_id', mineIds);
+          for (final id in mineIds) {
+            counts[id] = [0, 0, 0];
+          }
+          for (final x in lk) {
+            counts[x['voice_id']]![0]++;
+          }
+          for (final x in cm) {
+            counts[x['voice_id']]![1]++;
+          }
+          for (final x in rp) {
+            counts[x['voice_id']]![2]++;
+          }
+        } catch (_) {}
+      }
       if (!mounted) return;
       setState(() {
         _liked = {for (final x in l) x['voice_id'] as String};
         _reposted = {for (final x in r) x['voice_id'] as String};
+        _saved = saved;
+        _counts
+          ..clear()
+          ..addAll(counts);
       });
     } catch (_) {}
   }
@@ -101,11 +156,24 @@ class _VoiceListState extends State<VoiceList> {
         await _c.storage.from('voices').remove([v['audio_path'] as String]);
       } catch (_) {}
       if (mounted) setState(() => _hidden.add(id));
+      AppEvents.notifyPosted();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not delete that voice')));
     }
+  }
+
+  Widget _seenWrap(String id, Widget child) {
+    final cb = widget.onSeen;
+    if (cb == null) return child;
+    return VisibilityDetector(
+      key: Key('seen-$id'),
+      onVisibilityChanged: (info) {
+        if (info.visibleFraction >= 0.6 && _seenSent.add(id)) cb(id);
+      },
+      child: child,
+    );
   }
 
   @override
@@ -121,8 +189,14 @@ class _VoiceListState extends State<VoiceList> {
             padding: const EdgeInsets.only(bottom: 16),
             child: FadeSlideIn(
               delay: Duration(milliseconds: (i < 6 ? i : 6) * 70),
-              child: VoiceCard(
+              child: _seenWrap(
+                items[i]['id'] as String,
+                VoiceCard(
                 v: items[i],
+                saved: _saved.contains(items[i]['id']),
+                onSave: () =>
+                    _toggle('saves', items[i]['id'] as String, _saved),
+                counts: _counts[items[i]['id']],
                 liked: _liked.contains(items[i]['id']),
                 reposted: _reposted.contains(items[i]['id']),
                 onLike: () =>
@@ -143,6 +217,7 @@ class _VoiceListState extends State<VoiceList> {
                           builder: (_) => UserProfilePage(
                               userId: items[i]['user_id'] as String),
                         )),
+              ),
               ),
             ),
           ),

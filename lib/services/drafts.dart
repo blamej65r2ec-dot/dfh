@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:path_provider/path_provider.dart';
 
 class Draft {
@@ -10,6 +12,7 @@ class Draft {
     required this.durationMs,
     this.mood,
     this.caption = '',
+    this.visibility = 'public',
     DateTime? at,
   }) : at = at ?? DateTime.now();
 
@@ -18,6 +21,7 @@ class Draft {
   final int durationMs;
   final String? mood;
   final String caption;
+  final String visibility;
   final DateTime at;
 
   Map<String, dynamic> toJson() => {
@@ -26,6 +30,7 @@ class Draft {
         'durationMs': durationMs,
         'mood': mood,
         'caption': caption,
+        'visibility': visibility,
         'at': at.toIso8601String(),
       };
 
@@ -35,6 +40,7 @@ class Draft {
         durationMs: j['durationMs'] as int,
         mood: j['mood'] as String?,
         caption: (j['caption'] as String?) ?? '',
+        visibility: (j['visibility'] as String?) ?? 'public',
         at: DateTime.tryParse((j['at'] as String?) ?? ''),
       );
 }
@@ -42,7 +48,12 @@ class Draft {
 /// Drafts live on the phone only, until they are posted.
 class DraftStore {
   static Draft? _pending;
-  static void setPending(Draft d) => _pending = d;
+  static final ValueNotifier<int> pendingTick = ValueNotifier(0);
+  static void setPending(Draft d) {
+    _pending = d;
+    pendingTick.value++;
+  }
+
   static Draft? takePending() {
     final d = _pending;
     _pending = null;

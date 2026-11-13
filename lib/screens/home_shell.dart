@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/app_events.dart';
 import '../services/drafts.dart';
+import '../services/voice_player.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass.dart';
 import 'chat_page.dart';
@@ -20,6 +22,38 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _i = 0;
   bool _storyMode = false;
+  final PageController _pc = PageController();
+  bool _locked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    AppEvents.pagingLocked.addListener(_onLock);
+  }
+
+  @override
+  void dispose() {
+    AppEvents.pagingLocked.removeListener(_onLock);
+    _pc.dispose();
+    super.dispose();
+  }
+
+  void _onLock() {
+    if (mounted && _locked != AppEvents.pagingLocked.value) {
+      setState(() => _locked = AppEvents.pagingLocked.value);
+    }
+  }
+
+  void _go(int k) {
+    if (!_pc.hasClients) return;
+    if ((k - _i).abs() > 1) {
+      _pc.jumpToPage(k);
+    } else {
+      _pc.animateToPage(k,
+          duration: const Duration(milliseconds: 380),
+          curve: Curves.easeOutCubic);
+    }
+  }
 
   static const _icons = [
     Icons.home_rounded,
@@ -34,34 +68,32 @@ class _HomeShellState extends State<HomeShell> {
     switch (i) {
       case 0:
         return FeedPage(
-          onAddStory: () => setState(() {
-            _storyMode = true;
-            _i = 2;
-          }),
+          onAddStory: () {
+            setState(() => _storyMode = true);
+            _go(2);
+          },
         );
       case 1:
         return const SearchPage();
       case 2:
         return RecordPage(
           storyMode: _storyMode,
-          onPosted: () => setState(() {
-            _storyMode = false;
-            _i = 0;
-          }),
-          onClose: () => setState(() {
-            _storyMode = false;
-            _i = 0;
-          }),
+          onPosted: () {
+            setState(() => _storyMode = false);
+            _go(0);
+          },
+          onClose: () {
+            setState(() => _storyMode = false);
+            _go(0);
+          },
         );
       case 3:
         return const ChatPage();
       case 4:
         return ProfilePage(onOpenDraft: (d) {
+          setState(() => _storyMode = false);
           DraftStore.setPending(d);
-          setState(() {
-            _storyMode = false;
-            _i = 2;
-          });
+          _go(2);
         });
       default:
         return _Soon(_labels[i]);
@@ -76,21 +108,23 @@ class _HomeShellState extends State<HomeShell> {
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 320),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (child, anim) => FadeTransition(
-              opacity: anim,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.04, 0),
-                  end: Offset.zero,
-                ).animate(anim),
-                child: child,
-              ),
-            ),
-            child: KeyedSubtree(key: ValueKey(_i), child: _page(_i)),
+          PageView(
+            controller: _pc,
+            physics: _locked
+                ? const NeverScrollableScrollPhysics()
+                : const BouncingScrollPhysics(),
+            onPageChanged: (i) {
+              VoicePlayer.instance.stop();
+              FocusManager.instance.primaryFocus?.unfocus();
+              setState(() {
+                if (i != 2) _storyMode = false;
+                _i = i;
+              });
+            },
+            children: [
+              for (var k = 0; k < 5; k++)
+                _KeepAlive(key: ValueKey('tab$k'), child: _page(k)),
+            ],
           ),
           Positioned(
             left: 20,
@@ -139,10 +173,8 @@ class _HomeShellState extends State<HomeShell> {
                                   tooltip: _labels[k],
                                   onPressed: () {
                                     HapticFeedback.selectionClick();
-                                    setState(() {
-                                      if (k != 2) _storyMode = false;
-                                      _i = k;
-                                    });
+                                    if (k != 2) _storyMode = false;
+                                    _go(k);
                                   },
                                   icon: AnimatedScale(
                                     scale: k == _i ? 1.12 : 1,
@@ -186,5 +218,26 @@ class _Soon extends StatelessWidget {
     return Center(
       child: FadeSlideIn(child: Text('$name: coming next')),
     );
+  }
+}
+
+/// Keeps a tab alive while you swipe to other tabs.
+class _KeepAlive extends StatefulWidget {
+  const _KeepAlive({super.key, required this.child});
+  final Widget child;
+
+  @override
+  State<_KeepAlive> createState() => _KeepAliveState();
+}
+
+class _KeepAliveState extends State<_KeepAlive>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }

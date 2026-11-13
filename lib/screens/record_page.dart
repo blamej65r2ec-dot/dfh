@@ -10,13 +10,16 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/app_events.dart';
 import '../services/common.dart';
 import '../services/drafts.dart';
 import '../services/voice_player.dart';
 import '../services/wav.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass.dart';
+import 'post_details_page.dart';
 
+/// Step 1 of posting: record, listen, cut. Then "Next".
 class RecordPage extends StatefulWidget {
   const RecordPage({
     super.key,
@@ -36,7 +39,6 @@ class RecordPage extends StatefulWidget {
 class _RecordPageState extends State<RecordPage> {
   final _rec = AudioRecorder();
   final _preview = AudioPlayer();
-  final _caption = TextEditingController();
 
   // The recording, as bars (one per 80 ms) and raw audio in a master file.
   final List<double> _bars = [];
@@ -45,6 +47,10 @@ class _RecordPageState extends State<RecordPage> {
   String? _legacyPath; // an old draft that cannot be edited
   int _legacyMs = 0;
   String? _draftId;
+  String? _dMood;
+  String _dCaption = '';
+  String _dVis = 'public';
+  String? _exportPath;
 
   bool _recording = false;
   bool _locked = false;
@@ -56,8 +62,14 @@ class _RecordPageState extends State<RecordPage> {
   double _level = 0.1;
   Timer? _tick;
   StreamSubscription<Amplitude>? _amp;
+  StreamSubscription<Duration>? _posSub;
 
-  String? _mood;
+  // waveform window
+  int _viewStart = 0;
+  int _visible = 39;
+  double _acc = 0;
+  double _playPos = -1; // in bars; -1 = not playing
+
   bool _busy = false;
   bool _previewPlaying = false;
   String? _previewKey;
@@ -76,15 +88,39 @@ class _RecordPageState extends State<RecordPage> {
       if (s.processingState == ProcessingState.completed) {
         _preview.pause();
         _preview.seek(Duration.zero);
+        _playPos = -1;
+        _viewStart = max(0, _bars.length - _visible);
       }
       final pl = s.playing && s.processingState != ProcessingState.completed;
-      if (mounted && pl != _previewPlaying) setState(() => _previewPlaying = pl);
+      if (mounted && (pl != _previewPlaying || _playPos == -1)) {
+        setState(() => _previewPlaying = pl);
+      }
     });
+    _posSub = _preview
+        .createPositionStream(
+            minPeriod: const Duration(milliseconds: 40),
+            maxPeriod: const Duration(milliseconds: 80))
+        .listen((pos) {
+      if (!_previewPlaying || !mounted) return;
+      final p = pos.inMilliseconds / 80.0;
+      // The wave follows the playing position.
+      var vs = _viewStart;
+      if (p < vs || p > vs + _visible - 3) {
+        vs = max(0, min(p.floor() - 2, max(0, _bars.length - _visible)));
+      }
+      setState(() {
+        _playPos = p;
+        _viewStart = vs;
+      });
+    });
+    DraftStore.pendingTick.addListener(_checkPending);
     _loadStoryHours();
-    final pending = DraftStore.takePending();
-    if (pending != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadDraft(pending));
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPending());
+  }
+
+  void _checkPending() {
+    final d = DraftStore.takePending();
+    if (d != null) _loadDraft(d);
   }
 
   Future<void> _loadStoryHours() async {
@@ -101,14 +137,16 @@ class _RecordPageState extends State<RecordPage> {
 
   @override
   void dispose() {
+    DraftStore.pendingTick.removeListener(_checkPending);
+    AppEvents.pagingLocked.value = false;
     _tick?.cancel();
     _amp?.cancel();
+    _posSub?.cancel();
     if (_recording) _rec.stop();
     // Leaving with audio you did not post: keep it as a draft.
     if (_dirty && _hasAudio) _autosaveDraft();
     _rec.dispose();
     _preview.dispose();
-    _caption.dispose();
     super.dispose();
   }
 
@@ -120,8 +158,9 @@ class _RecordPageState extends State<RecordPage> {
         id: _draftId ?? DateTime.now().millisecondsSinceEpoch.toString(),
         path: exp.$1,
         durationMs: exp.$2,
-        mood: _mood,
-        caption: _caption.text.trim(),
+        mood: _dMood,
+        caption: _dCaption,
+        visibility: _dVis,
       ));
     } catch (_) {}
   }
@@ -138,7 +177,8 @@ class _RecordPageState extends State<RecordPage> {
   Future<File> _ensureMaster() async {
     if (_master != null) return _master!;
     final d = await _dir();
-    final f = File('${d.path}/master_${DateTime.now().millisecondsSinceEpoch}.pcm');
+    final f =
+        File('${d.path}/master_${DateTime.now().millisecondsSinceEpoch}.pcm');
     await f.writeAsBytes(const []);
     _master = f;
     return f;
@@ -160,8 +200,8 @@ class _RecordPageState extends State<RecordPage> {
     final have = await m.length();
     final bytes = min(have, _effective * kBytesPerBar);
     final d = await _dir();
-    final out = await buildWav(
-        m, bytes, '${d.path}/voice_${DateTime.now().millisecondsSinceEpoch}.wav');
+    final out = await buildWav(m, bytes,
+        '${d.path}/voice_${DateTime.now().millisecondsSinceEpoch}.wav');
     return (out.path, (bytes / kBytesPerBar * 80).round());
   }
 
@@ -175,6 +215,7 @@ class _RecordPageState extends State<RecordPage> {
     }
     _downY = e.position.dy;
     _pressActive = true;
+    AppEvents.pagingLocked.value = true;
     _beginRecording();
   }
 
@@ -191,6 +232,7 @@ class _RecordPageState extends State<RecordPage> {
   void _onUp(PointerEvent e) {
     _pressActive = false;
     if (_recording && !_locked) _stopRecording();
+    if (!_recording || !_locked) AppEvents.pagingLocked.value = false;
   }
 
   Future<void> _beginRecording() async {
@@ -199,6 +241,7 @@ class _RecordPageState extends State<RecordPage> {
     try {
       if (!await _rec.hasPermission()) {
         _pressActive = false;
+        AppEvents.pagingLocked.value = false;
         setState(() => _error = 'Microphone permission is needed to record.');
         return;
       }
@@ -219,7 +262,8 @@ class _RecordPageState extends State<RecordPage> {
         _cut = null;
       }
       final temp = await getTemporaryDirectory();
-      final seg = '${temp.path}/seg_${DateTime.now().millisecondsSinceEpoch}.wav';
+      final seg =
+          '${temp.path}/seg_${DateTime.now().millisecondsSinceEpoch}.wav';
       await _rec.start(
         const RecordConfig(
           encoder: AudioEncoder.wav,
@@ -247,6 +291,7 @@ class _RecordPageState extends State<RecordPage> {
         if (mounted) setState(() {});
       });
       _previewKey = null;
+      _playPos = -1;
       setState(() {
         _recording = true;
         _locked = false;
@@ -257,6 +302,7 @@ class _RecordPageState extends State<RecordPage> {
       _master = master;
       if (!_pressActive) _stopRecording();
     } catch (_) {
+      AppEvents.pagingLocked.value = false;
       if (mounted) setState(() => _recording = false);
     }
   }
@@ -265,6 +311,7 @@ class _RecordPageState extends State<RecordPage> {
     if (!_recording) return;
     _tick?.cancel();
     await _amp?.cancel();
+    AppEvents.pagingLocked.value = false;
     setState(() {
       _recording = false;
       _locked = false;
@@ -294,19 +341,33 @@ class _RecordPageState extends State<RecordPage> {
     } catch (_) {
       setState(() => _error = 'Could not save the recording. Try again.');
     }
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() => _viewStart = max(0, _bars.length - _visible));
+    }
   }
 
   // ---------- cut, preview ----------
 
-  void _dragCut(double dx, int visible, int start) {
-    if (_recording || _bars.isEmpty) return;
-    final idx = (start + (dx / 8).round()).clamp(0, _bars.length);
-    final next = idx >= _bars.length ? null : idx;
-    if (next != _cut) {
+  /// Dragging moves the cut marker. When it reaches the left edge the voice
+  /// slides, so you can go back to earlier parts. Drag right to bring it back.
+  void _dragCut(double dx) {
+    if (_recording || _bars.isEmpty || _previewPlaying) return;
+    _acc += dx / 8.0;
+    final steps = _acc.truncate();
+    if (steps == 0) return;
+    _acc -= steps;
+    final len = _bars.length;
+    final h = ((_cut ?? len) + steps).clamp(0, len);
+    var vs = _viewStart;
+    if (h - vs < 1) vs = max(0, h - 1);
+    if (h - vs > _visible - 2) vs = h - (_visible - 2);
+    vs = vs.clamp(0, max(0, len - _visible));
+    final next = h >= len ? null : h;
+    if (next != _cut || vs != _viewStart) {
       HapticFeedback.selectionClick();
       setState(() {
         _cut = next;
+        _viewStart = vs;
         _previewKey = null;
       });
     }
@@ -345,7 +406,6 @@ class _RecordPageState extends State<RecordPage> {
   // ---------- actions ----------
 
   void _reset() {
-    _caption.clear();
     _bars.clear();
     _cut = null;
     final m = _master;
@@ -355,10 +415,15 @@ class _RecordPageState extends State<RecordPage> {
     }
     _legacyPath = null;
     _draftId = null;
+    _dMood = null;
+    _dCaption = '';
+    _dVis = 'public';
     _previewKey = null;
+    _exportPath = null;
     _dirty = false;
+    _viewStart = 0;
+    _playPos = -1;
     setState(() {
-      _mood = null;
       _recording = false;
       _locked = false;
     });
@@ -366,7 +431,7 @@ class _RecordPageState extends State<RecordPage> {
 
   Future<void> _loadDraft(Draft d) async {
     try {
-      _caption.text = d.caption;
+      _reset();
       if (d.path.toLowerCase().endsWith('.wav')) {
         final master = await _ensureMaster();
         final raf = await master.open(mode: FileMode.write);
@@ -381,27 +446,58 @@ class _RecordPageState extends State<RecordPage> {
         _legacyMs = d.durationMs;
       }
       _draftId = d.id;
-      _previewKey = null;
-      if (mounted) setState(() => _mood = d.mood);
+      _dMood = d.mood;
+      _dCaption = d.caption;
+      _dVis = d.visibility;
+      if (mounted) {
+        setState(() => _viewStart = max(0, _bars.length - _visible));
+      }
     } catch (_) {
       if (mounted) setState(() => _error = 'Could not open that draft.');
     }
   }
 
-  Future<void> _saveDraft() async {
-    if (!_hasAudio) return;
-    setState(() => _busy = true);
+  Future<void> _next() async {
+    if (!_hasAudio || _busy || _recording) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       await _preview.stop();
+      final old = _exportPath;
       final exp = await _export();
-      if (exp != null) {
-        await DraftStore.add(Draft(
-          id: _draftId ?? DateTime.now().millisecondsSinceEpoch.toString(),
-          path: exp.$1,
-          durationMs: exp.$2,
-          mood: _mood,
-          caption: _caption.text.trim(),
-        ));
+      if (exp == null) throw Exception('nothing to post');
+      if (old != null && old != exp.$1 && old != _legacyPath) {
+        try {
+          await File(old).delete();
+        } catch (_) {}
+      }
+      _exportPath = exp.$1;
+      if (!mounted) return;
+      final result = await Navigator.of(context).push<String>(
+        MaterialPageRoute(
+          builder: (_) => PostDetailsPage(
+            audioPath: exp.$1,
+            durationMs: exp.$2,
+            bars: _bars.sublist(0, _effective),
+            storyMode: widget.storyMode,
+            storyHours: _storyHours,
+            draftId: _draftId,
+            initialMood: _dMood,
+            initialCaption: _dCaption,
+            initialVisibility: _dVis,
+          ),
+        ),
+      );
+      if (result == 'posted') {
+        try {
+          await File(exp.$1).delete();
+        } catch (_) {}
+        _reset();
+        AppEvents.notifyPosted();
+        widget.onPosted();
+      } else if (result == 'draft') {
         _reset();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -409,60 +505,7 @@ class _RecordPageState extends State<RecordPage> {
         }
       }
     } catch (_) {
-      if (mounted) setState(() => _error = 'Could not save the draft.');
-    }
-    if (mounted) setState(() => _busy = false);
-  }
-
-  Future<void> _post() async {
-    final mood = _mood;
-    if (mood == null || !_hasAudio) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await _preview.stop();
-      final exp = await _export();
-      if (exp == null) throw Exception('nothing to post');
-      final path = exp.$1;
-      final c = Supabase.instance.client;
-      final uid = c.auth.currentUser!.id;
-      final isWav = path.toLowerCase().endsWith('.wav');
-      final storagePath =
-          '$uid/${DateTime.now().millisecondsSinceEpoch}.${isWav ? 'wav' : 'm4a'}';
-      await c.storage.from('voices').upload(
-            storagePath,
-            File(path),
-            fileOptions:
-                FileOptions(contentType: isWav ? 'audio/wav' : 'audio/mp4'),
-          );
-      final cap = _caption.text.trim();
-      await c.from('voices').insert({
-        'user_id': uid,
-        'audio_path': storagePath,
-        'caption': cap.isEmpty ? null : cap,
-        'mood': mood,
-        'duration_ms': exp.$2,
-        'kind': widget.storyMode ? 'story' : 'post',
-        if (widget.storyMode)
-          'expires_at': DateTime.now()
-              .toUtc()
-              .add(Duration(hours: _storyHours))
-              .toIso8601String(),
-      });
-      if (_draftId != null) await DraftStore.removeById(_draftId!);
-      try {
-        await File(path).delete();
-      } catch (_) {}
-      _reset();
-      widget.onPosted();
-    } on StorageException catch (e) {
-      _error = e.message;
-    } on PostgrestException catch (e) {
-      _error = e.message;
-    } catch (e) {
-      _error = e.toString();
+      if (mounted) setState(() => _error = 'Something went wrong. Try again.');
     }
     if (mounted) setState(() => _busy = false);
   }
@@ -475,9 +518,10 @@ class _RecordPageState extends State<RecordPage> {
           ? 'Recording locked. Tap to stop.'
           : 'Release to stop. Slide up to lock.';
     }
+    if (_previewPlaying) return 'Listening...';
     if (!_hasAudio) return 'Hold the button to record';
     if (_cut != null) return 'The faded part is removed when you record again';
-    return 'Drag back on the wave to cut the end';
+    return 'Drag on the wave to cut the end';
   }
 
   Widget _waveBox() {
@@ -490,20 +534,23 @@ class _RecordPageState extends State<RecordPage> {
       child: SizedBox(
         height: 84,
         child: LayoutBuilder(builder: (context, c) {
-          final visible = max(8, ((c.maxWidth + 4) / 8).floor());
-          final start = max(0, _bars.length - visible);
+          _visible = max(8, ((c.maxWidth + 4) / 8).floor());
+          final start = _recording
+              ? max(0, _bars.length - _visible)
+              : _viewStart.clamp(0, max(0, _bars.length - _visible));
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onHorizontalDragUpdate: (d) =>
-                _dragCut(d.localPosition.dx, visible, start),
-            onTapDown: (d) => _dragCut(d.localPosition.dx, visible, start),
+            onHorizontalDragStart: (_) => _acc = 0,
+            onHorizontalDragUpdate: (d) => _dragCut(d.delta.dx),
             child: CustomPaint(
               size: Size(c.maxWidth, 84),
               painter: _RecWavePainter(
                 bars: List<double>.of(_bars),
                 start: start,
                 cut: _cut,
-                showHandle: !_recording && _bars.isNotEmpty,
+                playPos: _playPos,
+                showHandle:
+                    !_recording && _bars.isNotEmpty && !_previewPlaying,
                 on: cs.onSurface,
                 off: dark
                     ? const Color.fromRGBO(255, 255, 255, .25)
@@ -524,7 +571,6 @@ class _RecordPageState extends State<RecordPage> {
         alignment: Alignment.bottomCenter,
         clipBehavior: Clip.none,
         children: [
-          // lock indicator that rises while you slide up
           Positioned(
             bottom: 96 + 46 * _lockP,
             child: AnimatedOpacity(
@@ -580,53 +626,15 @@ class _RecordPageState extends State<RecordPage> {
     );
   }
 
-  Widget _moods() {
-    final cs = Theme.of(context).colorScheme;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        for (final m in moods)
-          PressScale(
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                setState(() => _mood = m.key);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _mood == m.key
-                      ? cs.onSurface.withAlpha(60)
-                      : cs.onSurface.withAlpha(20),
-                  border: Border.all(
-                    color: _mood == m.key
-                        ? cs.onSurface
-                        : Colors.transparent,
-                    width: 1.5,
-                  ),
-                ),
-                child: Text(m.emoji, style: const TextStyle(fontSize: 22)),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final grey = cs.onSurface.withAlpha(150);
-    final canPost = _mood != null && _hasAudio && !_busy && !_recording;
+    final canNext = _hasAudio && !_busy && !_recording;
     return SafeArea(
       bottom: false,
       child: ListView(
         physics: _recording ? const NeverScrollableScrollPhysics() : null,
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: EdgeInsets.fromLTRB(20, 8, 20, pageBottomPad(context)),
         children: [
           Row(
@@ -658,7 +666,9 @@ class _RecordPageState extends State<RecordPage> {
           const SizedBox(height: 16),
           Center(
             child: Text(
-              fmtDuration(_ms),
+              fmtDuration(_previewPlaying && _playPos >= 0
+                  ? (_playPos * 80).round()
+                  : _ms),
               style: const TextStyle(
                 fontSize: 52,
                 fontWeight: FontWeight.w700,
@@ -710,104 +720,46 @@ class _RecordPageState extends State<RecordPage> {
             ),
           ),
           _recordButton(),
-          const SizedBox(height: 6),
-          _moods(),
-          if (_mood == 'help')
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(
-                'If things feel heavy, reaching out to someone you trust can help.',
-                style: TextStyle(fontSize: 13, color: grey),
-              ),
-            ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              const Text('Caption',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              const Spacer(),
-              ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _caption,
-                builder: (context, v, _) => Text('${v.text.length}/60',
-                    style: TextStyle(fontSize: 12, color: grey)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _caption,
-            maxLength: 60,
-            maxLines: 1,
-            inputFormatters: [
-              FilteringTextInputFormatter.deny(RegExp(r'[\n\r]'))
-            ],
-            decoration: const InputDecoration(
-              hintText: 'Say what this voice is about',
-              counterText: '',
-            ),
-          ),
           if (_error != null)
             Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(_error!, style: TextStyle(color: cs.error)),
+              padding: const EdgeInsets.only(top: 6),
+              child: Center(
+                  child: Text(_error!, style: TextStyle(color: cs.error))),
             ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: (_hasAudio && !_busy && !_recording) ? _saveDraft : null,
-                  child: Opacity(
-                    opacity: (_hasAudio && !_busy && !_recording) ? 1 : 0.45,
-                    child: GlassBox(
-                      blur: false,
-                      radius: 27,
-                      child: const SizedBox(
-                        height: 54,
-                        child: Center(
-                          child: Text('Save draft',
-                              style: TextStyle(
-                                  fontSize: 15, fontWeight: FontWeight.w600)),
-                        ),
-                      ),
-                    ),
-                  ),
+          const SizedBox(height: 14),
+          PressScale(
+            child: GestureDetector(
+              onTap: canNext ? _next : null,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: 56,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: cs.primary.withAlpha(canNext ? 255 : 90),
+                  borderRadius: BorderRadius.circular(28),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: PressScale(
-                  child: GestureDetector(
-                    onTap: canPost ? _post : null,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      height: 54,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: cs.primary.withAlpha(canPost ? 255 : 100),
-                        borderRadius: BorderRadius.circular(27),
-                      ),
-                      child: _busy
-                          ? SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2.5, color: cs.onPrimary),
-                            )
-                          : Text(
-                              _mood == null && _hasAudio
-                                  ? 'Pick a mood'
-                                  : (widget.storyMode ? 'Share story' : 'Post'),
+                child: _busy
+                    ? SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: cs.onPrimary),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('Next',
                               style: TextStyle(
-                                  fontSize: 15,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w700,
-                                  color: cs.onPrimary),
-                            ),
-                    ),
-                  ),
-                ),
+                                  color: cs.onPrimary)),
+                          const SizedBox(width: 6),
+                          Icon(Icons.arrow_forward_rounded,
+                              size: 20, color: cs.onPrimary),
+                        ],
+                      ),
               ),
-            ],
+            ),
           ),
         ],
       ),
@@ -815,12 +767,13 @@ class _RecordPageState extends State<RecordPage> {
   }
 }
 
-/// Scrolling bars, with a draggable cut handle after you have recorded.
+/// Scrolling bars, a cut marker you can drag, and a playhead while listening.
 class _RecWavePainter extends CustomPainter {
   _RecWavePainter({
     required this.bars,
     required this.start,
     required this.cut,
+    required this.playPos,
     required this.showHandle,
     required this.on,
     required this.off,
@@ -829,6 +782,7 @@ class _RecWavePainter extends CustomPainter {
   final List<double> bars;
   final int start;
   final int? cut;
+  final double playPos;
   final bool showHandle;
   final Color on;
   final Color off;
@@ -836,8 +790,10 @@ class _RecWavePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final pOn = Paint()..color = on;
+    final pMid = Paint()..color = on.withAlpha(120);
     final pOff = Paint()..color = off;
     final maxBars = ((size.width + 4) / 8).floor();
+    final playing = playPos >= 0;
     for (var i = 0; i < maxBars; i++) {
       final idx = start + i;
       if (idx >= bars.length) break;
@@ -845,10 +801,26 @@ class _RecWavePainter extends CustomPainter {
       final x = i * 8.0;
       final y = (size.height - h) / 2;
       final faded = cut != null && idx >= cut!;
+      Paint paint;
+      if (faded) {
+        paint = pOff;
+      } else if (playing) {
+        paint = idx < playPos ? pOn : pMid;
+      } else {
+        paint = pOn;
+      }
       canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(x, y, 4, h), const Radius.circular(2)),
-        faded ? pOff : pOn,
+        paint,
+      );
+    }
+    if (playing) {
+      final px = ((playPos - start) * 8.0).clamp(0.0, size.width - 2);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(px, 0, 2, size.height), const Radius.circular(1)),
+        pOn,
       );
     }
     if (showHandle) {

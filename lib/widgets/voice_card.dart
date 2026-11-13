@@ -16,6 +16,9 @@ class VoiceCard extends StatelessWidget {
     required this.onRepost,
     required this.onReply,
     required this.onReport,
+    required this.saved,
+    required this.onSave,
+    this.counts,
     this.onDelete,
     this.onOpenProfile,
   });
@@ -27,6 +30,11 @@ class VoiceCard extends StatelessWidget {
   final VoidCallback onRepost;
   final VoidCallback onReply;
   final VoidCallback onReport;
+  final bool saved;
+  final VoidCallback onSave;
+
+  /// likes, replies, reposts. Only given for your own voices.
+  final List<int>? counts;
   final VoidCallback? onDelete;
   final VoidCallback? onOpenProfile;
 
@@ -55,19 +63,33 @@ class VoiceCard extends StatelessWidget {
   }
 
   Widget _action(BuildContext context, IconData off, IconData on, bool active,
-      VoidCallback tap) {
+      VoidCallback tap,
+      {int? count}) {
     final cs = Theme.of(context).colorScheme;
-    return IconButton(
-      constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-      onPressed: tap,
-      icon: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-        child: Icon(
-          active ? on : off,
-          key: ValueKey(active),
-          size: 24,
-          color: active ? cs.onSurface : cs.onSurface.withAlpha(150),
+    final color = active ? cs.onSurface : cs.onSurface.withAlpha(150);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: tap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+              child: Icon(active ? on : off,
+                  key: ValueKey(active), size: 24, color: color),
+            ),
+            if (count != null) ...[
+              const SizedBox(width: 5),
+              Text('$count',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface.withAlpha(170))),
+            ],
+          ],
         ),
       ),
     );
@@ -146,11 +168,16 @@ class VoiceCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _action(context, Icons.favorite_border_rounded,
-                  Icons.favorite_rounded, liked, onLike),
+                  Icons.favorite_rounded, liked, onLike,
+                  count: counts?[0]),
               _action(context, Icons.mode_comment_outlined,
-                  Icons.mode_comment_outlined, false, onReply),
+                  Icons.mode_comment_outlined, false, onReply,
+                  count: counts?[1]),
               _action(context, Icons.repeat_rounded, Icons.repeat_on_rounded,
-                  reposted, onRepost),
+                  reposted, onRepost,
+                  count: counts?[2]),
+              _action(context, Icons.bookmark_border_rounded,
+                  Icons.bookmark_rounded, saved, onSave),
             ],
           ),
         ],

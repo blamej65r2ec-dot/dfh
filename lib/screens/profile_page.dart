@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/app_events.dart';
 import '../services/common.dart';
 import '../services/drafts.dart';
 import '../services/follows.dart';
@@ -15,6 +16,7 @@ import '../widgets/avatar.dart';
 import '../widgets/glass.dart';
 import '../widgets/segmented_pill.dart';
 import '../widgets/voice_list.dart';
+import 'follow_list_page.dart';
 import 'settings_page.dart';
 
 const _voiceCols =
@@ -37,6 +39,7 @@ class _ProfilePageState extends State<ProfilePage> {
   int _likesIn = 0;
   int _repostsIn = 0;
   int _following = 0;
+  int _followers = 0;
   int _tab = 0; // 0 voices, 1 reposts, 2 drafts
   bool _loading = true;
   bool _uploading = false;
@@ -45,11 +48,13 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
+    AppEvents.postsChanged.addListener(_load);
     _load();
   }
 
   @override
   void dispose() {
+    AppEvents.postsChanged.removeListener(_load);
     VoicePlayer.instance.stop();
     super.dispose();
   }
@@ -71,6 +76,14 @@ class _ProfilePageState extends State<ProfilePage> {
       var repostsIn = 0;
       var drafts = <Draft>[];
       var following = 0;
+      var followers = 0;
+      try {
+        final fr = await _c
+            .from('follows')
+            .select('follower_id')
+            .eq('following_id', uid);
+        followers = fr.length;
+      } catch (_) {}
       try {
         following = (await Follows.mine()).length;
       } catch (_) {}
@@ -136,6 +149,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _repostsIn = repostsIn;
         _drafts = drafts;
         _following = following;
+        _followers = followers;
         _loading = false;
       });
     } catch (e) {
@@ -205,18 +219,23 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _stat(String value, String label) {
+  Widget _stat(String value, String label, {VoidCallback? onTap}) {
     final cs = Theme.of(context).colorScheme;
     return Expanded(
-      child: Column(
-        children: [
-          Text(value,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 2),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 13, color: cs.onSurface.withAlpha(160))),
-        ],
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Column(
+          children: [
+            Text(value,
+                style:
+                    const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 13, color: cs.onSurface.withAlpha(160))),
+          ],
+        ),
       ),
     );
   }
@@ -453,8 +472,18 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Row(
                   children: [
                     _stat('${_voices.length}', 'Voices'),
-                    _stat('$_following', 'Following'),
-                    _stat('${_reposts.length}', 'Reposts'),
+                    _stat('$_followers', 'Followers', onTap: () async {
+                      await Navigator.of(context).push(MaterialPageRoute<void>(
+                          builder: (_) =>
+                              const FollowListPage(followers: true)));
+                      _load();
+                    }),
+                    _stat('$_following', 'Following', onTap: () async {
+                      await Navigator.of(context).push(MaterialPageRoute<void>(
+                          builder: (_) =>
+                              const FollowListPage(followers: false)));
+                      _load();
+                    }),
                   ],
                 ),
               ),
@@ -468,7 +497,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       size: 14, color: cs.onSurface.withAlpha(140)),
                   const SizedBox(width: 6),
                   Text(
-                    'Only you see: $_likesIn likes · $_repostsIn reposts on your voices',
+                    'Only you can see these numbers',
                     style: TextStyle(
                         fontSize: 12, color: cs.onSurface.withAlpha(140)),
                   ),

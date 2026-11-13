@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/activity.dart';
+import '../services/app_events.dart';
 import '../services/common.dart';
 import '../services/stories.dart';
 import '../services/voice_player.dart';
@@ -22,23 +24,76 @@ class FeedPage extends StatefulWidget {
 }
 
 class _FeedPageState extends State<FeedPage> {
+  static const _page = 20;
   final _c = Supabase.instance.client;
+  final _scroll = ScrollController();
   List<Map<String, dynamic>> _items = [];
   List<StoryGroup> _stories = [];
   String _myName = '';
+  String? _cursor;
+  bool _more = true;
   bool _loading = true;
+  bool _loadingMore = false;
   String? _error;
+  Set<String> _seen = {};
 
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
+    AppEvents.postsChanged.addListener(_load);
     _load();
   }
 
   @override
   void dispose() {
-    VoicePlayer.instance.stop();
+    AppEvents.postsChanged.removeListener(_load);
+    _scroll.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scroll.hasClients &&
+        _scroll.position.pixels > _scroll.position.maxScrollExtent - 500) {
+      _loadMore();
+    }
+  }
+
+  void _markSeen(String id) {
+    _seen.add(id);
+    SeenVoices.add(id);
+  }
+
+  /// Gets the next voices you have not seen yet (each voice shows once).
+  Future<List<Map<String, dynamic>>> _fetchUnseen() async {
+    final out = <Map<String, dynamic>>[];
+    for (var round = 0; round < 5 && _more && out.length < 8; round++) {
+      var q = _c
+          .from('voices')
+          .select(voiceCols)
+          .eq('kind', 'post');
+      if (_cursor != null) q = q.lt('created_at', _cursor!);
+      List<dynamic> rows;
+      try {
+        rows = await q.order('created_at', ascending: false).limit(_page);
+      } catch (_) {
+        // update4.sql not run yet: load without the privacy column.
+        var q2 = _c.from('voices').select(voiceColsBasic).eq('kind', 'post');
+        if (_cursor != null) q2 = q2.lt('created_at', _cursor!);
+        rows = await q2.order('created_at', ascending: false).limit(_page);
+      }
+      if (rows.isNotEmpty) _cursor = rows.last['created_at'] as String;
+      if (rows.length < _page) _more = false;
+      for (final r in rows) {
+        final id = r['id'] as String;
+        if (_seen.contains(id)) continue;
+        if (_items.any((e) => e['id'] == id) || out.any((e) => e['id'] == id)) {
+          continue;
+        }
+        out.add(Map<String, dynamic>.from(r));
+      }
+    }
+    return out;
   }
 
   Future<void> _loadStories() async {
@@ -49,14 +104,18 @@ class _FeedPageState extends State<FeedPage> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() {
       _loading = _items.isEmpty;
       _error = null;
     });
     _loadStories();
     try {
-      final uid = _c.auth.currentUser!.id;
+      _seen = Set<String>.of(await SeenVoices.load());
+      _cursor = null;
+      _more = true;
       try {
+        final uid = _c.auth.currentUser!.id;
         final p = await _c
             .from('profiles')
             .select('username,nickname')
@@ -65,16 +124,11 @@ class _FeedPageState extends State<FeedPage> {
         final nick = (p['nickname'] as String?) ?? '';
         _myName = nick.isNotEmpty ? nick : (p['username'] as String? ?? '');
       } catch (_) {}
-      final data = await _c
-          .from('voices')
-          .select(
-              'id,user_id,audio_path,caption,mood,duration_ms,created_at,profiles(username,nickname,avatar_path)')
-          .eq('kind', 'post')
-          .order('created_at', ascending: false)
-          .limit(40);
+      _items = [];
+      final first = await _fetchUnseen();
       if (!mounted) return;
       setState(() {
-        _items = List<Map<String, dynamic>>.from(data);
+        _items = first;
         _loading = false;
       });
     } catch (_) {
@@ -84,6 +138,24 @@ class _FeedPageState extends State<FeedPage> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_more || _loading) return;
+    setState(() => _loadingMore = true);
+    try {
+      final more = await _fetchUnseen();
+      if (!mounted) return;
+      setState(() => _items = [..._items, ...more]);
+    } catch (_) {}
+    if (mounted) setState(() => _loadingMore = false);
+  }
+
+  Future<void> _showOlder() async {
+    await SeenVoices.clear();
+    _seen = {};
+    _items = [];
+    await _load();
   }
 
   Future<void> _openStories(int index) async {
@@ -209,6 +281,27 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
+  Widget _caughtUp(BuildContext context, {bool empty = false}) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: EdgeInsets.only(top: empty ? 50 : 8, bottom: 10),
+      child: Column(
+        children: [
+          Icon(Icons.check_circle_outline_rounded,
+              size: 34, color: cs.onSurface.withAlpha(120)),
+          const SizedBox(height: 10),
+          Text(empty ? 'No new voices right now' : "You're all caught up",
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('You have heard the newest voices.',
+              style: TextStyle(fontSize: 13, color: cs.onSurface.withAlpha(150))),
+          TextButton(
+              onPressed: _showOlder, child: const Text('Show older voices')),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -217,6 +310,8 @@ class _FeedPageState extends State<FeedPage> {
       child: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
+          controller: _scroll,
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.fromLTRB(0, 14, 0, pageBottomPad(context)),
           children: [
             FadeSlideIn(
@@ -292,15 +387,17 @@ class _FeedPageState extends State<FeedPage> {
                       ),
                     )
                   else if (_items.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 60),
-                      child: Center(
-                        child: Text('No voices here yet. Be the first to speak.',
-                            textAlign: TextAlign.center),
-                      ),
-                    )
-                  else
-                    VoiceList(items: _items),
+                    _caughtUp(context, empty: true)
+                  else ...[
+                    VoiceList(items: _items, onSeen: _markSeen),
+                    if (_loadingMore)
+                      const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (!_more)
+                      _caughtUp(context),
+                  ],
                 ],
               ),
             ),
