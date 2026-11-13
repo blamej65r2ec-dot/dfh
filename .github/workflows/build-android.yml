@@ -29,18 +29,30 @@ jobs:
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/; s/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/' android/app/build.gradle*
           grep -n "minSdk" android/app/build.gradle*
 
+      - name: Turn off Android lint for release builds
+        run: |
+          python3 - <<'PY'
+          import os, re
+          for f in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
+              if not os.path.exists(f):
+                  continue
+              kts = f.endswith('.kts')
+              block = (
+                  '    lint {\n        checkReleaseBuilds = false\n        abortOnError = false\n    }\n'
+                  if kts else
+                  '    lintOptions {\n        checkReleaseBuilds false\n        abortOnError false\n    }\n'
+              )
+              s = open(f).read()
+              s = re.sub(r'(^android\s*\{\n)', lambda m: m.group(1) + block, s, count=1, flags=re.M)
+              open(f, 'w').write(s)
+              print('patched', f)
+          PY
+          grep -n -B1 -A4 "lint" android/app/build.gradle* || true
+
       - name: Add internet and microphone permissions
         run: |
           sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <application#' android/app/src/main/AndroidManifest.xml
           grep -n "uses-permission" android/app/src/main/AndroidManifest.xml
-
-      - name: Disable Android Lint for release builds
-        run: |
-          if [ -f android/app/build.gradle.kts ]; then
-            printf '\nandroid {\n    lint {\n        checkReleaseBuilds = false\n        abortOnError = false\n    }\n}\n' >> android/app/build.gradle.kts
-          else
-            printf '\nandroid {\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }\n}\n' >> android/app/build.gradle
-          fi
 
       - run: flutter pub get
       - run: flutter build apk --release
