@@ -64,7 +64,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
     super.initState();
     _mood = widget.initialMood;
     _caption.text = widget.initialCaption;
-    _vis = _visKeys.indexOf(widget.initialVisibility).clamp(0, 2);
+    _vis = _visKeys.indexOf(widget.initialVisibility).clamp(0, 2).toInt();
     _player.playerStateStream.listen((s) {
       if (s.processingState == ProcessingState.completed) {
         _player.pause();
@@ -132,7 +132,8 @@ class _PostDetailsPageState extends State<PostDetailsPage> {
       for (var i = 0; i < n; i++)
         (() {
           final a = (i * src.length / n).floor();
-          final b = ((i + 1) * src.length / n).ceil().clamp(a + 1, src.length);
+          final b =
+              ((i + 1) * src.length / n).ceil().clamp(a + 1, src.length).toInt();
           var sum = 0.0;
           for (var k = a; k < b; k++) {
             sum += src[k];

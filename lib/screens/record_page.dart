@@ -357,11 +357,11 @@ class _RecordPageState extends State<RecordPage> {
     if (steps == 0) return;
     _acc -= steps;
     final len = _bars.length;
-    final h = ((_cut ?? len) + steps).clamp(0, len);
+    final h = ((_cut ?? len) + steps).clamp(0, len).toInt();
     var vs = _viewStart;
     if (h - vs < 1) vs = max(0, h - 1);
     if (h - vs > _visible - 2) vs = h - (_visible - 2);
-    vs = vs.clamp(0, max(0, len - _visible));
+    vs = vs.clamp(0, max(0, len - _visible)).toInt();
     final next = h >= len ? null : h;
     if (next != _cut || vs != _viewStart) {
       HapticFeedback.selectionClick();
@@ -537,7 +537,7 @@ class _RecordPageState extends State<RecordPage> {
           _visible = max(8, ((c.maxWidth + 4) / 8).floor());
           final start = _recording
               ? max(0, _bars.length - _visible)
-              : _viewStart.clamp(0, max(0, _bars.length - _visible));
+              : _viewStart.clamp(0, max(0, _bars.length - _visible)).toInt();
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onHorizontalDragStart: (_) => _acc = 0,
@@ -797,7 +797,7 @@ class _RecWavePainter extends CustomPainter {
     for (var i = 0; i < maxBars; i++) {
       final idx = start + i;
       if (idx >= bars.length) break;
-      final h = bars[idx].clamp(8.0, 60.0);
+      final h = bars[idx].clamp(8.0, 60.0).toDouble();
       final x = i * 8.0;
       final y = (size.height - h) / 2;
       final faded = cut != null && idx >= cut!;
@@ -816,7 +816,8 @@ class _RecWavePainter extends CustomPainter {
       );
     }
     if (playing) {
-      final px = ((playPos - start) * 8.0).clamp(0.0, size.width - 2);
+      final px =
+          ((playPos - start) * 8.0).clamp(0.0, size.width - 2).toDouble();
       canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(px, 0, 2, size.height), const Radius.circular(1)),
@@ -825,7 +826,7 @@ class _RecWavePainter extends CustomPainter {
     }
     if (showHandle) {
       final at = (cut ?? bars.length) - start;
-      final hx = (at * 8.0 - 2).clamp(0.0, size.width - 4);
+      final hx = (at * 8.0 - 2).clamp(0.0, size.width - 4).toDouble();
       canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(hx, 2, 3, size.height - 4), const Radius.circular(2)),

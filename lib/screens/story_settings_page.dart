@@ -98,7 +98,7 @@ class _StorySettingsPageState extends State<StorySettingsPage> {
                     const SizedBox(height: 14),
                     SegmentedPill(
                       labels: [for (final h in _hours) '${h}h'],
-                      selected: _hours.indexOf(_hoursValue).clamp(0, 3),
+                      selected: _hours.indexOf(_hoursValue).clamp(0, 3).toInt(),
                       onChanged: (i) {
                         setState(() => _hoursValue = _hours[i]);
                         _update({'story_hours': _hours[i]});

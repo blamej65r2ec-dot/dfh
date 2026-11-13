@@ -45,7 +45,7 @@ class _StoryViewerPageState extends State<StoryViewerPage> {
   void initState() {
     super.initState();
     _groups = List<StoryGroup>.of(widget.groups);
-    _gi = widget.startGroup.clamp(0, _groups.length - 1);
+    _gi = widget.startGroup.clamp(0, _groups.length - 1).toInt();
     _player.finished.addListener(_onFinished);
     _start();
   }
@@ -232,7 +232,7 @@ class _StoryViewerPageState extends State<StoryViewerPage> {
                           valueListenable: _player.progress,
                           builder: (context, p, _) => FractionallySizedBox(
                             alignment: Alignment.centerLeft,
-                            widthFactor: p.clamp(0.0, 1.0),
+                            widthFactor: p.clamp(0.0, 1.0).toDouble(),
                             child: Container(
                               decoration: BoxDecoration(
                                 color: cs.onSurface,
@@ -351,7 +351,7 @@ class _StoryViewerPageState extends State<StoryViewerPage> {
     final bars = barsFor(id, n: 56);
     return LayoutBuilder(builder: (context, c) {
       final w = c.maxWidth;
-      void seek(double dx) => _player.seekFraction((dx / w).clamp(0.0, 1.0));
+      void seek(double dx) => _player.seekFraction((dx / w).clamp(0.0, 1.0).toDouble());
       return Column(
         children: [
           GestureDetector(
